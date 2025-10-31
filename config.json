@@ -1,0 +1,36 @@
+ {
+  "log": {
+    "loglevel": "info"
+  },
+  "inbounds": [
+    {
+      "port": 8443,
+      "protocol": "vless",
+      "tag": "inbound-1",
+      "settings": {
+        "clients": [],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "www.ign.com:443",
+          "xver": 0,
+          "serverNames": ["www.ign.com", "www.cloudflare.com", "www.github.com"],
+          "privateKey": "yI_bmHZhTEujOyD9QWE7e2AtAtTd6XR6EbVmYrnEv04",
+          "minClientVer": "",
+          "maxClientVer": "",
+          "maxTimeDiff": 0,
+          "shortIds": ["2bd6a8283e"]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ]
+}
