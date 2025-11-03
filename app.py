@@ -639,6 +639,7 @@ def process_subscription_days(user_id: str) -> bool:
                     
                     if new_days == 0:
                         update_data['has_subscription'] = False
+                        update_data['subscription_end'] = datetime.now().isoformat()  # Записываем конец подписки
                         if vless_uuid:
                             asyncio.create_task(remove_user_from_xray(vless_uuid))
                             user_vless_keys = get_user_vless_keys(user_id)
@@ -810,27 +811,70 @@ async def update_subscription_days(user_id: str, additional_days: int, server_id
                 'last_subscription_check': datetime.now().date().isoformat()
             }
             
+            # Записываем начало подписки, если это новая подписка
+            if has_subscription and not user_data.get('subscription_start'):
+                update_data['subscription_start'] = datetime.now().isoformat()
+            
+            # Рассчитываем дату окончания подписки
+            if has_subscription:
+                subscription_end = datetime.now() + timedelta(days=new_days)
+                update_data['subscription_end'] = subscription_end.isoformat()
+            
             if has_subscription:
                 try:
                     vless_uuid = await ensure_user_uuid(user_id, server_id)
                     update_data['vless_uuid'] = vless_uuid
-                    update_data['subscription_start'] = datetime.now().isoformat()
                     
-                    if server_id:
-                        update_data['preferred_server'] = server_id
+                    if not user_data.get('subscription_start'):
+                        update_data['subscription_start'] = datetime.now().isoformat()
                         
                 except Exception as e:
                     logger.error(f"❌ FAILED to ensure UUID for user {user_id}: {e}")
                     return False
             
             user_ref.update(update_data)
-            logger.info(f"✅ Subscription updated for user {user_id}: +{additional_days} days")
+            logger.info(f"✅ Subscription updated for user {user_id}: +{additional_days} days, start: {update_data.get('subscription_start')}, end: {update_data.get('subscription_end')}")
             return True
         else:
             return False
     except Exception as e:
         logger.error(f"❌ Error updating subscription days: {e}")
         return False
+
+def save_referral_link(user_id: str, referral_link: str):
+    """Сохраняет реферальную ссылку пользователя"""
+    if not db:
+        return False
+    
+    try:
+        user_ref = db.collection('users').document(user_id)
+        user_ref.update({
+            'referral_link': referral_link,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        })
+        logger.info(f"✅ Referral link saved for user {user_id}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Error saving referral link: {e}")
+        return False
+
+def get_referral_link(user_id: str) -> str:
+    """Получает реферальную ссылку пользователя"""
+    if not db:
+        return None
+    
+    try:
+        user = get_user(user_id)
+        if user:
+            return user.get('referral_link')
+        return None
+    except Exception as e:
+        logger.error(f"❌ Error getting referral link: {e}")
+        return None
+
+def generate_referral_link(user_id: str) -> str:
+    """Генерирует реферальную ссылку для пользователя"""
+    return f"https://t.me/vaaaac_bot?start=ref_{user_id}"
 
 # Функция для запуска бота в отдельном процессе
 def run_bot():
@@ -980,6 +1024,7 @@ async def init_user(request: InitUserRequest):
                 'has_subscription': False,
                 'subscription_days': 0,
                 'subscription_start': None,
+                'subscription_end': None,
                 'vless_uuid': None,
                 'preferred_server': None,
                 'last_subscription_check': datetime.now().date().isoformat(),
@@ -989,6 +1034,10 @@ async def init_user(request: InitUserRequest):
             if is_referral and referrer_id:
                 user_data['referred_by'] = referrer_id
             
+            # Генерируем и сохраняем реферальную ссылку
+            referral_link = generate_referral_link(request.user_id)
+            user_data['referral_link'] = referral_link
+            
             user_ref.set(user_data)
             
             return {
@@ -996,18 +1045,27 @@ async def init_user(request: InitUserRequest):
                 "message": "User created",
                 "user_id": request.user_id,
                 "is_referral": is_referral,
-                "bonus_applied": bonus_applied
+                "bonus_applied": bonus_applied,
+                "referral_link": referral_link
             }
         else:
             user_data = user_doc.to_dict()
             has_referrer = user_data.get('referred_by') is not None
+            
+            # Если у пользователя еще нет реферальной ссылки, генерируем и сохраняем её
+            if not user_data.get('referral_link'):
+                referral_link = generate_referral_link(request.user_id)
+                save_referral_link(request.user_id, referral_link)
+            else:
+                referral_link = user_data.get('referral_link')
             
             return {
                 "success": True, 
                 "message": "User already exists", 
                 "user_id": request.user_id,
                 "is_referral": has_referrer,
-                "bonus_applied": False
+                "bonus_applied": False,
+                "referral_link": referral_link
             }
             
     except Exception as e:
@@ -1033,7 +1091,10 @@ async def get_user_info(user_id: str):
                 "has_subscription": False,
                 "subscription_days": 0,
                 "vless_uuid": None,
-                "preferred_server": None
+                "preferred_server": None,
+                "subscription_start": None,
+                "subscription_end": None,
+                "referral_link": None
             }
         
         has_subscription = user.get('has_subscription', False)
@@ -1041,6 +1102,9 @@ async def get_user_info(user_id: str):
         vless_uuid = user.get('vless_uuid')
         balance = user.get('balance', 0.0)
         preferred_server = user.get('preferred_server')
+        subscription_start = user.get('subscription_start')
+        subscription_end = user.get('subscription_end')
+        referral_link = user.get('referral_link')
         
         vless_keys = get_user_vless_keys(user_id)
         
@@ -1055,6 +1119,9 @@ async def get_user_info(user_id: str):
             "subscription_days": subscription_days,
             "vless_uuid": vless_uuid,
             "preferred_server": preferred_server,
+            "subscription_start": subscription_start,
+            "subscription_end": subscription_end,
+            "referral_link": referral_link,
             "vless_keys": vless_keys,
             "referral_stats": {
                 "total_referrals": referral_count,
@@ -1558,7 +1625,9 @@ async def get_active_users():
                 active_users.append({
                     "user_id": user_data.get('user_id'),
                     "uuid": user_data.get('vless_uuid'),
-                    "subscription_days": user_data.get('subscription_days', 0)
+                    "subscription_days": user_data.get('subscription_days', 0),
+                    "subscription_start": user_data.get('subscription_start'),
+                    "subscription_end": user_data.get('subscription_end')
                 })
         
         return {
@@ -1655,6 +1724,7 @@ async def admin_cancel_subscription(user_id: str):
             'has_subscription': False,
             'subscription_days': 0,
             'subscription_start': None,
+            'subscription_end': datetime.now().isoformat(),  # Записываем время окончания подписки
             'updated_at': firestore.SERVER_TIMESTAMP
         }
         
@@ -1668,13 +1738,64 @@ async def admin_cancel_subscription(user_id: str):
             "success": True,
             "message": f"Subscription cancelled for user {user_id}",
             "user_id": user_id,
-            "has_subscription": False,
+            "has_subscription': False,
             "subscription_days": 0,
-            "vless_uuid": vless_uuid
+            "vless_uuid": vless_uuid,
+            "subscription_end": update_data['subscription_end']
         }
             
     except Exception as e:
         logger.error(f"❌ Error cancelling subscription: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/get-referral-link")
+async def get_referral_link_endpoint(user_id: str):
+    """Получить реферальную ссылку пользователя"""
+    try:
+        if not db:
+            return JSONResponse(status_code=500, content={"error": "Database not connected"})
+        
+        user = get_user(user_id)
+        if not user:
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+        
+        referral_link = user.get('referral_link')
+        if not referral_link:
+            # Если ссылки нет, генерируем и сохраняем её
+            referral_link = generate_referral_link(user_id)
+            save_referral_link(user_id, referral_link)
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "referral_link": referral_link
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting referral link: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/referral-stats")
+async def get_referral_stats(user_id: str):
+    """Получить статистику по рефералам"""
+    try:
+        if not db:
+            return JSONResponse(status_code=500, content={"error": "Database not connected"})
+        
+        referrals = get_referrals(user_id)
+        referral_count = len(referrals)
+        total_bonus_money = sum([ref.get('referrer_bonus', 0) for ref in referrals])
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "referral_count": referral_count,
+            "total_bonus_money": total_bonus_money,
+            "referrals": referrals
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting referral stats: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 if __name__ == "__main__":
