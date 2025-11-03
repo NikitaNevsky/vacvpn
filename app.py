@@ -1738,7 +1738,7 @@ async def admin_cancel_subscription(user_id: str):
             "success": True,
             "message": f"Subscription cancelled for user {user_id}",
             "user_id": user_id,
-            "has_subscription': False,
+            "has_subscription": False,
             "subscription_days": 0,
             "vless_uuid": vless_uuid,
             "subscription_end": update_data['subscription_end']
