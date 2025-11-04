@@ -51,22 +51,45 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Конфигурация серверов
+# Конфигурация серверов
 XRAY_SERVERS = {
-    "moscow": {
+    "moscow_old": {
         "url": "http://45.134.13.189:8001",
-        "api_key": "d67764b644f977a3edd4a6fb3cee00f1b89a406c1a86a662f490e797b7ea2367",
-        "display_name": "🇷🇺 Москва #1"
+        "api_key": "d67764b644f977a3edd4a6fb3cee00f1b89a406c1a86a662f490e797b7ea2367",  
+        "display_name": "🇷🇺 Москва #1",
+        "api_url": "http://45.134.13.189:8002",  
+        "reality_pbk": "Mue7dfZz2BXeu_p4u2moigD8243gmcnO5ohEjLzGYR0",
+        "ssh_host": "45.134.13.189"
+    },
+    "moscow_new": {
+        "url": "http://103.75.126.91:8001",  
+        "api_key": "6e6fb03c83484749d7bf1d3ca0d130fbfee3854c4a8ce84fc8aabfeaa2c19fd1",  
+        "display_name": "🇷🇺 Москва #2",
+        "api_url": "http://103.75.126.91:8002",  
+        "reality_pbk": "biUkzZNhzbhq_b8jcw2_xbpyAQPojjG_icyZ_syWdm8",
+        "ssh_host": "103.75.126.91"
     }
 }
 
 VLESS_SERVERS = [
     {
-        "id": "London", 
-        "name": "London",
+        "id": "moscow_old", 
+        "name": "🇷🇺 Москва Reality #1",
         "address": "45.134.13.189",
         "port": 2053,
         "sni": "www.google.com",
         "reality_pbk": "Mue7dfZz2BXeu_p4u2moigD8243gmcnO5ohEjLzGYR0",
+        "short_id": "abcd1234",
+        "flow": "xtls-rprx-vision",
+        "security": "reality"
+    },
+    {
+        "id": "moscow_new", 
+        "name": "🇷🇺 Москва Reality #2",
+        "address": "103.75.126.91", 
+        "port": 2053,
+        "sni": "www.google.com",
+        "reality_pbk": "biUkzZNhzbhq_b8jcw2_xbpyAQPojjG_icyZ_syWdm8",
         "short_id": "abcd1234",
         "flow": "xtls-rprx-vision",
         "security": "reality"
@@ -247,56 +270,46 @@ async def check_user_in_xray(user_uuid: str, server_id: str = None) -> bool:
         logger.error(f"❌ [XRAY CHECK] Exception: {str(e)}")
         return False
 
-async def add_user_to_xray(user_uuid: str, server_id: str = None) -> bool:
-    """Добавить пользователя в Xray сервер(ы) - МАКСИМАЛЬНО БЫСТРО"""
+async def add_user_to_xray_server(server_id: str, user_id: str, user_uuid: str) -> bool:
+    """Добавить пользователя на сервер Xray через прямой API вызов"""
     try:
-        logger.info(f"🚀 [XRAY ADD FAST] Adding user: {user_uuid} to server: {server_id}")
+        if server_id not in XRAY_SERVERS:
+            logger.error(f"❌ Unknown server: {server_id}")
+            return False
         
-        servers_to_process = []
+        server_config = XRAY_SERVERS[server_id]
+        api_url = f"{server_config['api_url']}/add-user"
         
-        if server_id and server_id in XRAY_SERVERS:
-            servers_to_process = [(server_id, XRAY_SERVERS[server_id])]
-        else:
-            servers_to_process = list(XRAY_SERVERS.items())
+        payload = {
+            "user_id": user_id,
+            "uuid": user_uuid
+        }
         
-        success_count = 0
+        headers = {
+            "Authorization": f"Bearer {server_config['api_key']}",
+            "Content-Type": "application/json"
+        }
         
-        for server_name, server_config in servers_to_process:
-            try:
-                async with httpx.AsyncClient() as client:
-                    payload = {"uuid": user_uuid}
-                    
-                    # Быстрый запрос без лишних проверок
-                    response = await client.post(
-                        f"{server_config['url']}/user",
-                        headers={
-                            "X-API-Key": server_config["api_key"],
-                            "Content-Type": "application/json"
-                        },
-                        json=payload,
-                        timeout=8.0  # Оптимальный таймаут
-                    )
-                    
-                    if response.status_code in [200, 201]:
-                        data = response.json()
-                        if data.get('success'):
-                            logger.info(f"✅ SUCCESS: User {user_uuid} added to {server_name}")
-                            success_count += 1
-                        else:
-                            logger.warning(f"⚠️ API returned success=False but continuing")
-                    else:
-                        logger.warning(f"⚠️ {server_name} returned {response.status_code}, but continuing")
-                        
-            except Exception as e:
-                logger.warning(f"⚠️ Error adding to {server_name}: {e}, but continuing")
+        logger.info(f"🚀 Sending user {user_id} to {server_id} via API: {api_url}")
         
-        logger.info(f"🎯 FAST ADDITION: {success_count}/{len(servers_to_process)} servers")
-        return success_count > 0
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(api_url, json=payload, headers=headers)
             
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("success"):
+                    logger.info(f"✅ User {user_id} successfully added to {server_id}")
+                    return True
+                else:
+                    logger.error(f"❌ API returned error for {server_id}: {result.get('error')}")
+                    return False
+            else:
+                logger.error(f"❌ API call failed for {server_id}: {response.status_code} - {response.text}")
+                return False
+                
     except Exception as e:
-        logger.error(f"❌ [XRAY ADD] Exception: {str(e)}")
+        logger.error(f"❌ Error calling Xray API for {server_id}: {e}")
         return False
-
 async def remove_user_from_xray(user_uuid: str, server_id: str = None) -> bool:
     """Удалить пользователя из Xray сервер(ы)"""
     try:
