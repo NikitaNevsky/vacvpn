@@ -232,12 +232,12 @@ async def get_cabinet_message(user_id: int):
     total_referrals = referral_stats.get('total_referrals', 0)
     total_bonus_money = referral_stats.get('total_bonus_money', 0)
     
-    # ДОБАВЬТЕ URL ДЛЯ ПРЕВЬЮ-КНОПКИ
-    web_app_url = WEB_APP_URL
+    # ДОБАВЬТЕ URL ДЛЯ ПРЕВЬЮ-КНОПКИ (Railway домен)
+    api_url = API_BASE_URL
     
     return f"""
 <b>Личный кабинет VAC VPN</b>
-<a href="{web_app_url}">‎</a>
+<a href="{api_url}">‎</a>
 
 💰 Баланс: <b>{balance}₽</b>
 📅 Статус подписки: <b>{status_text}</b>
