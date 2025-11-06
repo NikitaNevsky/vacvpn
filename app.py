@@ -51,7 +51,6 @@ os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Конфигурация серверов
-# Конфигурация серверов
 XRAY_SERVERS = {
     "London": {
         "url": "http://45.134.13.189:8001",
@@ -310,6 +309,7 @@ async def add_user_to_xray_server(server_id: str, user_id: str, user_uuid: str) 
     except Exception as e:
         logger.error(f"❌ Error calling Xray API for {server_id}: {e}")
         return False
+
 async def remove_user_from_xray(user_uuid: str, server_id: str = None) -> bool:
     """Удалить пользователя из Xray сервер(ы)"""
     try:
@@ -1094,7 +1094,8 @@ async def get_user_info(user_id: str):
         if not user_id or user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
             
-        process_subscription_days(user_id)
+        # БЫСТРАЯ проверка подписки без блокировки
+        asyncio.create_task(process_subscription_days_async(user_id))
             
         user = get_user(user_id)
         if not user:
@@ -1146,7 +1147,15 @@ async def get_user_info(user_id: str):
         }
         
     except Exception as e:
+        logger.error(f"❌ Error in get_user_info: {e}")
         return JSONResponse(status_code=500, content={"error": f"Error getting user info: {str(e)}"})
+
+async def process_subscription_days_async(user_id: str):
+    """Асинхронная обработка дней подписки"""
+    try:
+        process_subscription_days(user_id)
+    except Exception as e:
+        logger.error(f"❌ Error in async subscription processing: {e}")
 
 @app.post("/add-balance")
 async def add_balance(request: AddBalanceRequest):
@@ -1237,7 +1246,7 @@ async def activate_tariff(request: ActivateTariffRequest):
         tariff_price = tariff_data["price"]
         tariff_days = tariff_data["days"]
         
-        selected_server = request.selected_server or user.get('preferred_server') or "moscow"
+        selected_server = request.selected_server or user.get('preferred_server') or "London"
         
         if request.payment_method == "balance":
             user_balance = user.get('balance', 0.0)
@@ -1347,7 +1356,7 @@ async def buy_with_balance(request: BuyWithBalanceRequest):
         if not user:
             return JSONResponse(status_code=404, content={"error": "User not found"})
         
-        selected_server = request.selected_server or "moscow"
+        selected_server = request.selected_server or "London"
         
         user_balance = user.get('balance', 0.0)
         
@@ -1512,7 +1521,8 @@ async def get_vless_config(user_id: str, server_id: str = None):
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
             
-        process_subscription_days(user_id)
+        # Асинхронная проверка подписки без блокировки
+        asyncio.create_task(process_subscription_days_async(user_id))
             
         user = get_user(user_id)
         if not user:
@@ -1666,7 +1676,7 @@ async def force_add_to_xray(user_id: str, server_id: str = None):
         if not vless_uuid:
             return JSONResponse(status_code=400, content={"error": "User has no UUID"})
         
-        success = await add_user_to_xray(vless_uuid, server_id)
+        success = await add_user_to_xray_server(server_id, user_id, vless_uuid)
         
         if success:
             return {
@@ -1697,7 +1707,7 @@ async def emergency_add_to_xray(user_id: str):
         success_count = 0
         for server_name, server_config in XRAY_SERVERS.items():
             try:
-                success = await add_user_to_xray(vless_uuid, server_name)
+                success = await add_user_to_xray_server(server_name, user_id, vless_uuid)
                 if success:
                     success_count += 1
             except Exception as e:
