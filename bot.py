@@ -36,18 +36,18 @@ TG_CHANNEL = os.getenv("TG_CHANNEL", "@vac_vpn")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "vaaaac_bot")
 
 # URL API и веб-приложения
-# URL API и веб-приложения
 RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
 
 if RAILWAY_STATIC_URL:
     API_BASE_URL = f"https://{RAILWAY_STATIC_URL}"
-    WEB_APP_URL = f"https://{RAILWAY_STATIC_URL}"  # Тот же URL что и API
+    WEB_APP_URL = f"https://{RAILWAY_STATIC_URL}"
 else:
     API_BASE_URL = "http://localhost:8443"
     WEB_APP_URL = "http://localhost:8443"
 
 logger.info(f"🌐 API сервер: {API_BASE_URL}")
 logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
+
 # Настройка бота
 bot = Bot(
     token=TOKEN, 
@@ -58,7 +58,6 @@ dp = Dispatcher()
 async def make_api_request(endpoint: str, method: str = "GET", json_data: dict = None, params: dict = None):
     """Упрощенная функция для запросов к API"""
     try:
-        # Используем глобальную переменную API_BASE_URL
         url = f"{API_BASE_URL}{endpoint}"
         timeout_config = httpx.Timeout(30.0, connect=10.0)
         
@@ -107,7 +106,7 @@ async def send_referral_notification(referrer_id: int, referred_user):
         await bot.send_message(
             chat_id=referrer_id,
             text=message,
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО
+            disable_web_page_preview=True
         )
         logger.info(f"✅ Уведомление отправлено рефереру {referrer_id}")
         return True
@@ -235,7 +234,6 @@ async def get_cabinet_message(user_id: int):
     
     return f"""
 <b>Личный кабинет VAC VPN</b>
-<a href="{WEB_APP_URL}">‎</a>
 
 💰 Баланс: <b>{balance}₽</b>
 📅 Статус подписки: <b>{status_text}</b>
@@ -247,6 +245,7 @@ async def get_cabinet_message(user_id: int):
 
 💡 Для покупки подписки используйте веб-кабинет.
 """
+
 def get_ref_message(user_id: int):
     return f"""
 <b>Реферальная программа VAC VPN</b>
@@ -356,7 +355,7 @@ async def cmd_start(message: types.Message):
     await message.answer(
         text=get_welcome_message(user.first_name, is_referral),
         reply_markup=get_main_keyboard(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(Command("cabinet"))
@@ -366,7 +365,7 @@ async def cmd_cabinet(message: types.Message):
     await message.answer(
         cabinet_text, 
         reply_markup=get_cabinet_keyboard(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(Command("referral"))
@@ -375,7 +374,7 @@ async def cmd_referral(message: types.Message):
     await message.answer(
         get_ref_message(user_id), 
         reply_markup=get_ref_keyboard(user_id),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(Command("support"))
@@ -383,7 +382,7 @@ async def cmd_support(message: types.Message):
     await message.answer(
         get_support_message(), 
         reply_markup=get_support_keyboard(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(Command("vless"))
@@ -393,7 +392,7 @@ async def cmd_vless(message: types.Message):
     await message.answer(
         vless_text, 
         reply_markup=get_vless_keyboard(), 
-        disable_web_page_preview=True  # ← УЖЕ БЫЛО, ОСТАВЛЯЕМ
+        disable_web_page_preview=True
     )
 
 # Обработчики кнопок (используем F для фильтров)
@@ -404,7 +403,7 @@ async def cabinet_handler(message: types.Message):
     await message.answer(
         cabinet_text, 
         reply_markup=get_cabinet_keyboard(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(F.text == "👥 Рефералка")
@@ -413,7 +412,7 @@ async def referral_handler(message: types.Message):
     await message.answer(
         get_ref_message(user_id), 
         reply_markup=get_ref_keyboard(user_id),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(F.text == "🛠️ Техподдержка")
@@ -421,7 +420,7 @@ async def support_handler(message: types.Message):
     await message.answer(
         get_support_message(), 
         reply_markup=get_support_keyboard(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(F.text == "🌐 Веб-кабинет")
@@ -438,7 +437,7 @@ async def web_app_handler(message: types.Message):
         f"🌐 <b>Веб-кабинет VAC VPN</b>\n\n"
         f"Для покупки подписки и управления аккаунтом откройте веб-кабинет:",
         reply_markup=builder.as_markup(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 @dp.message(F.text == "🔧 VLESS Конфиг")
@@ -448,7 +447,7 @@ async def vless_handler(message: types.Message):
     await message.answer(
         vless_text, 
         reply_markup=get_vless_keyboard(), 
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
 
 # Обработчики callback-кнопок
@@ -458,7 +457,7 @@ async def back_to_menu_handler(callback: types.CallbackQuery):
     await callback.message.answer(
         "Главное меню VAC VPN",
         reply_markup=get_main_keyboard(),
-        disable_web_page_preview=True  # ← ДОБАВЛЕНО
+        disable_web_page_preview=True
     )
     await callback.answer()
 
@@ -471,14 +470,14 @@ async def refresh_cabinet_handler(callback: types.CallbackQuery):
         await callback.message.edit_text(
             cabinet_text, 
             reply_markup=get_cabinet_keyboard(),
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО ДЛЯ EDIT
+            disable_web_page_preview=True
         )
         await callback.answer("✅ Данные обновлены")
     except Exception as e:
         await callback.message.answer(
             cabinet_text, 
             reply_markup=get_cabinet_keyboard(),
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО
+            disable_web_page_preview=True
         )
         await callback.answer("✅ Данные обновлены")
 
@@ -491,14 +490,14 @@ async def refresh_refs_handler(callback: types.CallbackQuery):
         await callback.message.edit_text(
             new_ref_message, 
             reply_markup=get_ref_keyboard(user_id),
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО ДЛЯ EDIT
+            disable_web_page_preview=True
         )
         await callback.answer("✅ Статистика обновлена")
     except Exception as e:
         await callback.message.answer(
             new_ref_message, 
             reply_markup=get_ref_keyboard(user_id),
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО
+            disable_web_page_preview=True
         )
         await callback.answer("✅ Статистика обновлены")
 
@@ -511,14 +510,14 @@ async def refresh_vless_handler(callback: types.CallbackQuery):
         await callback.message.edit_text(
             vless_text, 
             reply_markup=get_vless_keyboard(), 
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО ДЛЯ EDIT
+            disable_web_page_preview=True
         )
         await callback.answer("✅ Конфигурация обновлена")
     except Exception as e:
         await callback.message.answer(
             vless_text, 
             reply_markup=get_vless_keyboard(), 
-            disable_web_page_preview=True  # ← ДОБАВЛЕНО
+            disable_web_page_preview=True
         )
         await callback.answer("✅ Конфигурация обновлена")
 
@@ -529,7 +528,6 @@ async def errors_handler(update: types.Update, exception: Exception):
     return True
 
 async def run_bot():
-    # ДОБАВЬТЕ ЭТУ СТРОКУ ДЛЯ ПРОВЕРКИ ВЕРСИИ
     logger.info("🔄 BOT VERSION 2.0 - WEB PREVIEW DISABLED")
     
     logger.info("🤖 Бот VAC VPN запускается...")
