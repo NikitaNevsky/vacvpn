@@ -7,52 +7,6 @@
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    /* Добавляем стили для прелоадера */
-    #preloader {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: var(--bg);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 9999;
-      transition: opacity 0.3s ease;
-    }
-    
-    .loader-spinner {
-      width: 40px;
-      height: 40px;
-      border: 4px solid rgba(176, 203, 31, 0.3);
-      border-top: 4px solid var(--primary);
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin-bottom: 16px;
-    }
-    
-    .loader-text {
-      color: var(--primary);
-      font-weight: 600;
-    }
-    
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    
-    /* Скрываем основной контент до загрузки */
-    .content-hidden {
-      opacity: 0;
-      transition: opacity 0.3s ease;
-    }
-    
-    .content-visible {
-      opacity: 1;
-    }
-
     :root {
       --primary: #B0CB1F;
       --bg: #121212;
@@ -576,238 +530,203 @@
 </head>
 <body>
 
-  <!-- Прелоадер -->
-  <div id="preloader">
-    <div class="loader-spinner"></div>
-    <div class="loader-text">Загрузка VAC VPN...</div>
+  <div class="top-bar">
+    <div class="logo-container">
+      <div id="logoContainer">
+        <!-- Логотип будет загружен через JavaScript -->
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <div class="user-name" id="userName">Загрузка...</div>
+      <div class="menu-btn" onclick="toggleMenu()">≡</div>
+    </div>
   </div>
 
-  <!-- Основной контент (изначально скрыт) -->
-  <div id="mainContent" class="content-hidden">
-    <div class="top-bar">
-      <div class="logo-container">
-        <div id="logoContainer">
-          <!-- Логотип будет загружен через JavaScript -->
-        </div>
-      </div>
-      <div class="top-bar-right">
-        <div class="user-name" id="userName">Загрузка...</div>
-        <div class="menu-btn" onclick="toggleMenu()">≡</div>
-      </div>
-    </div>
+  <div class="menu-dropdown" id="menuDropdown">
+    <a href="#" onclick="showSupportChat()">Чат поддержки</a>
+    <a href="#" onclick="showRules()">Правила</a>
+    <div class="divider"></div>
+    <a href="#" onclick="logout()">Выход</a>
+  </div>
 
-    <div class="menu-dropdown" id="menuDropdown">
-      <a href="#" onclick="showSupportChat()">Чат поддержки</a>
-      <a href="#" onclick="showRules()">Правила</a>
-      <div class="divider"></div>
-      <a href="#" onclick="logout()">Выход</a>
+  <!-- Остальной код остается без изменений -->
+  <div class="card">
+    <div class="balance-info">
+      <div>💰 <strong>Баланс:</strong> <span id="userBalance">0</span>₽</div>
+      <button class="button button-outline" onclick="showAddBalanceModal()" style="margin: 8px 0 0 0; padding: 8px;">
+        💰 ПОПОЛНИТЬ БАЛАНС
+      </button>
     </div>
-
-    <!-- Остальной код остается без изменений -->
-    <div class="card">
-      <div class="balance-info">
-        <div>💰 <strong>Баланс:</strong> <span id="userBalance">0</span>₽</div>
-        <button class="button button-outline" onclick="showAddBalanceModal()" style="margin: 8px 0 0 0; padding: 8px;">
-          💰 ПОПОЛНИТЬ БАЛАНС
-        </button>
+    
+    <div class="subscription-info" id="subscriptionInfo" style="display: none;">
+      <div>📅 <strong>Информация о подписке:</strong></div>
+      <div class="days-counter" id="daysCounter">
+        <div class="days-number" id="daysNumber">0</div>
+        <div class="days-label" id="daysLabel">дней осталось</div>
       </div>
       
-      <div class="subscription-info" id="subscriptionInfo" style="display: none;">
-        <div>📅 <strong>Информация о подписке:</strong></div>
-        <div class="days-counter" id="daysCounter">
-          <div class="days-number" id="daysNumber">0</div>
-          <div class="days-label" id="daysLabel">дней осталось</div>
+      <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">
+        Подписка активна до: <strong id="subscriptionEndDate">-</strong>
+      </div>
+    </div>
+    
+    <div class="subscription-status" id="subscriptionStatus">
+      <span>Статус подписки:</span>
+      <span class="badge inactive-badge" id="subscriptionBadge">Неактивна</span>
+    </div>
+    
+    <div class="vless-config" id="vlessConfigContainer">
+      <h3 style="color: var(--primary); margin-bottom: 12px;">🔧 VLESS Конфигурация</h3>
+      <div style="margin-bottom: 12px;">
+        <strong>UUID:</strong> 
+        <div style="font-family: monospace; background: rgba(176, 203, 31, 0.1); padding: 8px; border-radius: 4px; margin-top: 4px; word-break: break-all; font-size: 12px;" id="vlessUuidText">
+          Загрузка...
+        </div>
+      </div>
+      <div id="vlessServersList"></div>
+      <div style="margin-top: 12px; padding: 12px; background: rgba(176, 203, 31, 0.1); border-radius: 6px;">
+        <strong>📱 Инструкции по установке:</strong>
+        <ul style="margin: 8px 0; padding-left: 20px; font-size: 12px;">
+          <li><strong>Android:</strong> Скачайте V2RayNG из Play Store</li>
+          <li><strong>iOS:</strong> Скачайте Shadowrocket из App Store</li>
+          <li><strong>Windows:</strong> Скачайте V2RayN с GitHub</li>
+          <li><strong>macOS:</strong> Скачайте V2RayU с GitHub</li>
+        </ul>
+      </div>
+    </div>
+    
+    <button class="button button-yellow" onclick="scrollToTariffs()">КУПИТЬ/ПРОДЛИТЬ ПОДПИСКУ</button>
+    <button class="button button-outline" id="vlessButton" onclick="getVlessConfig()" style="display: none;">ПОЛУЧИТЬ VLESS КОНФИГ</button>
+    
+    <div class="loading" id="loadingIndicator">Подождите, идет обработка...</div>
+    <div class="error-message" id="errorMessage"></div>
+    <div class="success-message" id="successMessage"></div>
+  </div>
+
+  <!-- Модальное окно пополнения баланса -->
+  <div class="payment-modal" id="addBalanceModal">
+    <div class="payment-content">
+      <h3 style="color: var(--primary); margin-bottom: 10px;">💰 Пополнение баланса</h3>
+      
+      <div class="add-balance-section">
+        <div style="margin-bottom: 8px; font-weight: 600;">Сумма пополнения:</div>
+        <input type="number" class="amount-input" id="balanceAmount" placeholder="Введите сумму" min="10" max="50000" value="100">
+        
+        <div class="amount-presets">
+          <div class="amount-preset" onclick="setBalanceAmount(100)">100₽</div>
+          <div class="amount-preset" onclick="setBalanceAmount(300)">300₽</div>
+          <div class="amount-preset" onclick="setBalanceAmount(500)">500₽</div>
+          <div class="amount-preset" onclick="setBalanceAmount(1000)">1000₽</div>
         </div>
         
-        <div style="font-size: 13px; opacity: 0.8; margin-top: 4px;">
-          Подписка активна до: <strong id="subscriptionEndDate">-</strong>
+        <div style="font-size: 12px; opacity: 0.8; margin-top: 8px;">
+          Минимум: 10₽, Максимум: 50,000₽
         </div>
       </div>
       
-      <div class="subscription-status" id="subscriptionStatus">
-        <span>Статус подписки:</span>
-        <span class="badge inactive-badge" id="subscriptionBadge">Неактивна</span>
-      </div>
-      
-      <div class="vless-config" id="vlessConfigContainer">
-        <h3 style="color: var(--primary); margin-bottom: 12px;">🔧 VLESS Конфигурация</h3>
-        <div style="margin-bottom: 12px;">
-          <strong>UUID:</strong> 
-          <div style="font-family: monospace; background: rgba(176, 203, 31, 0.1); padding: 8px; border-radius: 4px; margin-top: 4px; word-break: break-all; font-size: 12px;" id="vlessUuidText">
-            Загрузка...
-          </div>
-        </div>
-        <div id="vlessServersList"></div>
-        <div style="margin-top: 12px; padding: 12px; background: rgba(176, 203, 31, 0.1); border-radius: 6px;">
-          <strong>📱 Инструкции по установке:</strong>
-          <ul style="margin: 8px 0; padding-left: 20px; font-size: 12px;">
-            <li><strong>Android:</strong> Скачайте V2RayNG из Play Store</li>
-            <li><strong>iOS:</strong> Скачайте Shadowrocket из App Store</li>
-            <li><strong>Windows:</strong> Скачайте V2RayN с GitHub</li>
-            <li><strong>macOS:</strong> Скачайте V2RayU с GitHub</li>
-          </ul>
-        </div>
-      </div>
-      
-      <button class="button button-yellow" onclick="scrollToTariffs()">КУПИТЬ/ПРОДЛИТЬ ПОДПИСКУ</button>
-      <button class="button button-outline" id="vlessButton" onclick="getVlessConfig()" style="display: none;">ПОЛУЧИТЬ VLESS КОНФИГ</button>
-      
-      <div class="loading" id="loadingIndicator">Подождите, идет обработка...</div>
-      <div class="error-message" id="errorMessage"></div>
-      <div class="success-message" id="successMessage"></div>
+      <button class="button button-yellow" onclick="addBalance()">ПОПОЛНИТЬ БАЛАНС</button>
+      <button class="button button-outline" onclick="closeAddBalanceModal()" style="margin-top: 10px;">ОТМЕНА</button>
     </div>
+  </div>
 
-    <!-- Модальное окно пополнения баланса -->
-    <div class="payment-modal" id="addBalanceModal">
-      <div class="payment-content">
-        <h3 style="color: var(--primary); margin-bottom: 10px;">💰 Пополнение баланса</h3>
-        
-        <div class="add-balance-section">
-          <div style="margin-bottom: 8px; font-weight: 600;">Сумма пополнения:</div>
-          <input type="number" class="amount-input" id="balanceAmount" placeholder="Введите сумму" min="10" max="50000" value="100">
-          
-          <div class="amount-presets">
-            <div class="amount-preset" onclick="setBalanceAmount(100)">100₽</div>
-            <div class="amount-preset" onclick="setBalanceAmount(300)">300₽</div>
-            <div class="amount-preset" onclick="setBalanceAmount(500)">500₽</div>
-            <div class="amount-preset" onclick="setBalanceAmount(1000)">1000₽</div>
-          </div>
-          
-          <div style="font-size: 12px; opacity: 0.8; margin-top: 8px;">
-            Минимум: 10₽, Максимум: 50,000₽
-          </div>
-        </div>
-        
-        <button class="button button-yellow" onclick="addBalance()">ПОПОЛНИТЬ БАЛАНС</button>
-        <button class="button button-outline" onclick="closeAddBalanceModal()" style="margin-top: 10px;">ОТМЕНА</button>
+  <div class="card" id="tariffBlock">
+    <div class="tariff-info">
+      💡 <strong>Как работает подписка:</strong><br>
+      1. Выбираете тариф и способ оплаты<br>
+      2. Оплачиваете через ЮKassa или с баланса<br>
+      3. После успешной оплаты подписка активируется<br>
+      4. Рефералы пополняют ваш баланс<br>
+      5. Можно купить несколько тарифов - дни суммируются
+    </div>
+    
+    <div class="tariff-grid">
+      <div class="tariff-card" id="tariff1month" onclick="selectTariff('1month')">
+        <div class="tariff-dot"></div>
+        <div class="tariff-label">1 Месяц</div>
+        <div class="tariff-price">150₽</div>
+        <div class="tariff-trial">30 дней</div>
+        <div class="tariff-description">Доступ к VPN на 30 дней. Реферал пополняет баланс</div>
+      </div>
+      <div class="tariff-card" id="tariff1year" onclick="selectTariff('1year')">
+        <div class="tariff-dot"></div>
+        <div class="tariff-label">1 Год</div>
+        <div class="tariff-price">1300₽</div>
+        <div class="tariff-trial">365 дней</div>
+        <div class="tariff-description">Доступ к VPN на 365 дней. Реферал пополняет баланс</div>
       </div>
     </div>
-
-    <div class="card" id="tariffBlock">
-      <div class="tariff-info">
-        💡 <strong>Как работает подписка:</strong><br>
-        1. Выбираете тариф и способ оплаты<br>
-        2. Оплачиваете через ЮKassa или с баланса<br>
-        3. После успешной оплаты подписка активируется<br>
-        4. Рефералы пополняют ваш баланс<br>
-        5. Можно купить несколько тарифов - дни суммируются
-      </div>
-      
-      <div class="tariff-grid">
-        <div class="tariff-card" id="tariff1month" onclick="selectTariff('1month')">
-          <div class="tariff-dot"></div>
-          <div class="tariff-label">1 Месяц</div>
-          <div class="tariff-price">150₽</div>
-          <div class="tariff-trial">30 дней</div>
-          <div class="tariff-description">Доступ к VPN на 30 дней. Реферал пополняет баланс</div>
-        </div>
-        <div class="tariff-card" id="tariff1year" onclick="selectTariff('1year')">
-          <div class="tariff-dot"></div>
-          <div class="tariff-label">1 Год</div>
-          <div class="tariff-price">1300₽</div>
-          <div class="tariff-trial">365 дней</div>
-          <div class="tariff-description">Доступ к VPN на 365 дней. Реферал пополняет баланс</div>
-        </div>
-      </div>
-      
-      <div id="tariffPaymentInfo" style="display: none; margin: 12px 0; padding: 12px; background: rgba(176, 203, 31, 0.1); border-radius: 8px;">
-        <strong>При покупке подписки:</strong><br>
-        • Стоимость: <strong style="color: var(--primary);" id="tariffPrice">150₽</strong><br>
-        • Период: <strong id="tariffPeriod">30 дней</strong><br>
-        • Реферал: <strong>+50₽ на ваш баланс</strong><br>
-        • После оплаты: <strong>Подписка активируется сразу</strong>
-      </div>
-
-      <div id="paymentMethods" style="display: none; margin: 12px 0;">
-        <div style="margin-bottom: 8px; font-weight: 600;">Способ оплаты:</div>
-        <div class="payment-methods">
-          <div class="payment-method" id="paymentBalance" onclick="selectPaymentMethod('balance')">
-            <div class="payment-icon">💰</div>
-            <div class="payment-label">С баланса</div>
-            <div class="payment-details" id="balanceDetails" style="font-size: 11px; margin-top: 4px;"></div>
-          </div>
-          <div class="payment-method selected" id="paymentYookassa" onclick="selectPaymentMethod('yookassa')">
-            <div class="payment-icon">💳</div>
-            <div class="payment-label">Картой</div>
-            <div style="font-size: 11px; margin-top: 4px;">ЮKassa</div>
-          </div>
-        </div>
-      </div>
-      
-      <button class="button button-yellow" id="buyTariffBtn" style="display:none;" onclick="buyTariff()">КУПИТЬ ПОДПИСКУ</button>
+    
+    <div id="tariffPaymentInfo" style="display: none; margin: 12px 0; padding: 12px; background: rgba(176, 203, 31, 0.1); border-radius: 8px;">
+      <strong>При покупке подписки:</strong><br>
+      • Стоимость: <strong style="color: var(--primary);" id="tariffPrice">150₽</strong><br>
+      • Период: <strong id="tariffPeriod">30 дней</strong><br>
+      • Реферал: <strong>+50₽ на ваш баланс</strong><br>
+      • После оплаты: <strong>Подписка активируется сразу</strong>
     </div>
 
-    <div class="card">
-      <div class="referral-block">
-        <div class="referral-description">
-          🎁 <strong>Реферальная система:</strong><br>
-          • Приглашенный друг получает <strong style="color: var(--primary);">100₽ на баланс</strong><br>
-          • Вы получаете <strong style="color: var(--primary);">50₽ на баланс</strong> за каждого друга<br>
-          • Друг должен перейти по вашей ссылке и купить любой тариф<br>
-          • Бонусы начисляются автоматически после покупки тарифа<br>
-          • Баланс можно использовать для оплаты подписок
+    <div id="paymentMethods" style="display: none; margin: 12px 0;">
+      <div style="margin-bottom: 8px; font-weight: 600;">Способ оплаты:</div>
+      <div class="payment-methods">
+        <div class="payment-method" id="paymentBalance" onclick="selectPaymentMethod('balance')">
+          <div class="payment-icon">💰</div>
+          <div class="payment-label">С баланса</div>
+          <div class="payment-details" id="balanceDetails" style="font-size: 11px; margin-top: 4px;"></div>
         </div>
-        <div class="ref-link-box">
-          <span class="ref-link-text" id="refLink">Загрузка ссылки...</span>
-          <button class="copy-btn" onclick="copyRef()">Скопировать</button>
-        </div>
-        <div id="referralStats" style="margin-top: 12px; padding: 10px; background: rgba(176, 203, 31, 0.1); border-radius: 6px; font-size: 13px;">
-          <strong>Ваша реферальная статистика:</strong><br>
-          • Приглашено друзей: <strong id="referralCount">0</strong><br>
-          • Всего получено: <strong id="totalBonusMoney">0</strong>₽
+        <div class="payment-method selected" id="paymentYookassa" onclick="selectPaymentMethod('yookassa')">
+          <div class="payment-icon">💳</div>
+          <div class="payment-label">Картой</div>
+          <div style="font-size: 11px; margin-top: 4px;">ЮKassa</div>
         </div>
       </div>
     </div>
+    
+    <button class="button button-yellow" id="buyTariffBtn" style="display:none;" onclick="buyTariff()">КУПИТЬ ПОДПИСКУ</button>
+  </div>
 
-    <div class="card">
-      <button class="button-help" onclick="showHelp()">Помощь</button>
-    </div>
-
-    <div class="qr-modal" id="qrModal">
-      <div class="qr-content">
-        <h3 style="color: var(--primary); margin-bottom: 10px;">📱 QR код для импорта</h3>
-        <img class="qr-image" id="qrImage" src="" alt="QR Code">
-        <button class="close-btn" onclick="closeQRModal()">Закрыть</button>
+  <div class="card">
+    <div class="referral-block">
+      <div class="referral-description">
+        🎁 <strong>Реферальная система:</strong><br>
+        • Приглашенный друг получает <strong style="color: var(--primary);">100₽ на баланс</strong><br>
+        • Вы получаете <strong style="color: var(--primary);">50₽ на баланс</strong> за каждого друга<br>
+        • Друг должен перейти по вашей ссылке и купить любой тариф<br>
+        • Бонусы начисляются автоматически после покупки тарифа<br>
+        • Баланс можно использовать для оплаты подписок
+      </div>
+      <div class="ref-link-box">
+        <span class="ref-link-text" id="refLink">Загрузка ссылки...</span>
+        <button class="copy-btn" onclick="copyRef()">Скопировать</button>
+      </div>
+      <div id="referralStats" style="margin-top: 12px; padding: 10px; background: rgba(176, 203, 31, 0.1); border-radius: 6px; font-size: 13px;">
+        <strong>Ваша реферальная статистика:</strong><br>
+        • Приглашено друзей: <strong id="referralCount">0</strong><br>
+        • Всего получено: <strong id="totalBonusMoney">0</strong>₽
       </div>
     </div>
+  </div>
 
-    <div class="payment-modal" id="paymentModal">
-      <div class="payment-content">
-        <h3 style="color: var(--primary); margin-bottom: 10px;">💳 Оплата подписки</h3>
-        <p style="margin-bottom: 15px;">Вы будете перенаправлены на страницу оплаты ЮKassa</p>
-        <button class="button button-yellow" onclick="proceedToPayment()">ПЕРЕЙТИ К ОПЛАТЕ</button>
-        <button class="button button-outline" onclick="closePaymentModal()" style="margin-top: 10px;">ОТМЕНА</button>
-      </div>
+  <div class="card">
+    <button class="button-help" onclick="showHelp()">Помощь</button>
+  </div>
+
+  <div class="qr-modal" id="qrModal">
+    <div class="qr-content">
+      <h3 style="color: var(--primary); margin-bottom: 10px;">📱 QR код для импорта</h3>
+      <img class="qr-image" id="qrImage" src="" alt="QR Code">
+      <button class="close-btn" onclick="closeQRModal()">Закрыть</button>
+    </div>
+  </div>
+
+  <div class="payment-modal" id="paymentModal">
+    <div class="payment-content">
+      <h3 style="color: var(--primary); margin-bottom: 10px;">💳 Оплата подписки</h3>
+      <p style="margin-bottom: 15px;">Вы будете перенаправлены на страницу оплаты ЮKassa</p>
+      <button class="button button-yellow" onclick="proceedToPayment()">ПЕРЕЙТИ К ОПЛАТЕ</button>
+      <button class="button button-outline" onclick="closePaymentModal()" style="margin-top: 10px;">ОТМЕНА</button>
     </div>
   </div>
 
   <script>
-    // Функция для скрытия прелоадера и показа контента
-    function showContent() {
-      const preloader = document.getElementById('preloader');
-      const mainContent = document.getElementById('mainContent');
-      
-      // Плавно скрываем прелоадер
-      preloader.style.opacity = '0';
-      
-      setTimeout(() => {
-        preloader.style.display = 'none';
-        // Показываем основной контент
-        mainContent.classList.remove('content-hidden');
-        mainContent.classList.add('content-visible');
-      }, 300);
-    }
-
-    // Функция для скрытия прелоадера с задержкой (минимум 1 секунда)
-    function hidePreloaderWithDelay() {
-      setTimeout(showContent, 1000);
-    }
-
-    // Функция для принудительного скрытия прелоадера при ошибках
-    function forceHidePreloader() {
-      setTimeout(showContent, 500);
-    }
-
     // Инициализация Telegram WebApp
     let tg = window.Telegram.WebApp;
     tg.ready();
@@ -822,7 +741,7 @@
     console.log('👤 Telegram User Data:', { userId, userName, userUsername });
 
     // URL API
-    const API_BASE_URL = "https://vacvpn-api-production-d067.up.railway.app";
+   const API_BASE_URL = "https://vacvpn-production.up.railway.app";
 
     // Переменные для хранения данных
     let currentPaymentId = null;
@@ -858,7 +777,7 @@
         if (!logoContainer) return;
         
         const logoUrls = [
-            'https://vacvpn-api-production-d067.up.railway.app/static/Airbrush-Image-Enhancer-1753455007914.png',
+            'https://vacvpn-production.up.railway.app/static/Airbrush-Image-Enhancer-1753455007914.png',
             '/static/Airbrush-Image-Enhancer-1753455007914.png',
             './static/Airbrush-Image-Enhancer-1753455007914.png',
             'Airbrush-Image-Enhancer-1753455007914.png',
@@ -1550,7 +1469,6 @@
             if (!userId || userId === 'unknown') {
                 console.error('❌ User ID not available from Telegram');
                 showError('Ошибка: Telegram не предоставил данные пользователя. Откройте через бота.');
-                forceHidePreloader();
                 return;
             }
             
@@ -1586,12 +1504,10 @@
                 
             } else {
                 console.warn('⚠️ User init warning:', data.error);
-                await loadUserData(); // Все равно загружаем данные пользователя
             }
         } catch (error) {
             console.error('❌ User init error:', error);
             showError('Ошибка инициализации: ' + error.message);
-            await loadUserData(); // Пытаемся загрузить данные даже при ошибке
         }
     }
 
@@ -1601,7 +1517,6 @@
             console.log('🔄 Loading user data for:', userId);
             
             if (!userId || userId === 'unknown') {
-                forceHidePreloader();
                 return;
             }
             
@@ -1620,15 +1535,9 @@
             
             updateUserInterface(userData);
             
-            // Скрываем прелоадер после успешной загрузки данных
-            hidePreloaderWithDelay();
-            
         } catch (error) {
             console.error('❌ Ошибка загрузки данных:', error);
             showError('Ошибка загрузки данных: ' + error.message);
-            
-            // Принудительно скрываем прелоадер даже при ошибках
-            forceHidePreloader();
         }
     }
 
@@ -1726,14 +1635,7 @@
     // Инициализация при загрузке страницы
     document.addEventListener('DOMContentLoaded', function() {
         console.log('🚀 Starting VAC VPN WebApp...');
-        
-        // Сразу показываем прелоадер
-        document.getElementById('preloader').style.display = 'flex';
-        
-        // Загружаем логотип с fallback
-        loadLogoWithFallback();
-        
-        // Инициализируем пользователя
+        loadLogoWithFallback(); // Загружаем логотип с fallback
         initUser();
         
         // Закрываем меню при клике вне его
@@ -1744,9 +1646,6 @@
                 menu.style.display = 'none';
             }
         });
-        
-        // На всякий случай скрываем прелоадер через 5 секунд
-        setTimeout(forceHidePreloader, 5000);
     });
   </script>
 </body>
