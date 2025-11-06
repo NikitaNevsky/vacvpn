@@ -47,13 +47,12 @@ app.add_middleware(
         "https://telegram.org",
         "http://localhost:3000",
         "http://localhost:8443",
-        "https://localhost:3000",
+        "https://localhost:3000", 
         "https://localhost:8443",
-        "http://127.0.0.1:3000", 
+        "http://127.0.0.1:3000",
         "http://127.0.0.1:8443",
         "https://127.0.0.1:3000",
-        "https://127.0.0.1:8443",
-        "*"
+        "https://127.0.0.1:8443"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -986,47 +985,18 @@ async def clear_referrals(user_id: str):
         logger.error(f"❌ Error clearing referrals: {e}")
         return {"error": str(e)}
 
+# В функции init-user уберите блок обработки preview
 @app.post("/init-user")
 async def init_user(request: InitUserRequest):
     try:
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
-        # Обработка случая Preview-режима
+        # УДАЛИТЕ ЭТОТ БЛОК - обработку preview пользователей
         if not request.user_id or request.user_id == 'unknown':
-            # Создаем временного пользователя для Preview
-            preview_user_id = f"preview_{int(datetime.now().timestamp())}"
-            
-            user_data = {
-                'user_id': preview_user_id,
-                'username': "preview_user",
-                'first_name': "Preview",
-                'last_name': "User", 
-                'balance': 0.0,
-                'has_subscription': False,
-                'subscription_days': 0,
-                'subscription_start': None,
-                'subscription_end': None,
-                'vless_uuid': None,
-                'preferred_server': None,
-                'last_subscription_check': datetime.now().date().isoformat(),
-                'created_at': firestore.SERVER_TIMESTAMP,
-                'is_preview': True
-            }
-            
-            user_ref = db.collection('users').document(preview_user_id)
-            user_ref.set(user_data)
-            
-            return {
-                "success": True, 
-                "message": "Preview user created",
-                "user_id": preview_user_id,
-                "is_preview": True,
-                "is_referral": False,
-                "bonus_applied": False,
-                "referral_link": None
-            }
+            return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
         
+        # Остальной код оставляем без изменений...
         referrer_id = None
         is_referral = False
         bonus_applied = False
