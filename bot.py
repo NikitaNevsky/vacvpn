@@ -528,7 +528,7 @@ async def errors_handler(update: types.Update, exception: Exception):
     return True
 
 # Запуск бота
-async def main():
+async def run_bot():
     logger.info("🤖 Бот VAC VPN запускается...")
     logger.info(f"🌐 API сервер: {API_BASE_URL}")
     logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
@@ -548,6 +548,10 @@ def signal_handler(signum, frame):
 async def shutdown():
     await bot.session.close()
     sys.exit(0)
+
+# Для запуска отдельно
+async def main():
+    await run_bot()
 
 if __name__ == "__main__":
     # Регистрируем обработчики сигналов
