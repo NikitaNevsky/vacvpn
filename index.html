@@ -1499,38 +1499,68 @@
     }
 
     // Загрузка данных пользователя
-    async function loadUserData() {
-        try {
-            console.log('🔄 Loading user data for:', userId);
-            
-            if (!userId || userId === 'unknown') {
-                return;
-            }
-            
-            const response = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const userData = await response.json();
-            console.log('📊 User data loaded:', userData);
-            
-            if (userData.error && !userData.is_preview) {
-                throw new Error(userData.error);
-            }
-            
-            updateUserInterface(userData);
-            
-        } catch (error) {
-            console.error('❌ Ошибка загрузки данных:', error);
-            showError('Ошибка загрузки данных: ' + error.message);
-            
-            // Показываем базовый интерфейс даже при ошибке
-            showPreviewInterface();
-        }
-    }
+    // В функции loadUserData упростите обработку ошибок
+async function loadUserData() {
+    try {
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const errorMessage = document.getElementById('errorMessage');
+        const successMessage = document.getElementById('successMessage');
+        
+        errorMessage.style.display = 'none';
+        successMessage.style.display = 'none';
+        loadingIndicator.style.display = 'block';
 
+        console.log('🔄 Loading user data for:', userId);
+
+        // Сначала инициализируем пользователя
+        const initResponse = await fetch(`${API_BASE_URL}/init-user`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                username: initData.user?.username || "",
+                first_name: userName,
+                last_name: initData.user?.last_name || "",
+                start_param: ""
+            })
+        });
+
+        if (!initResponse.ok) {
+            throw new Error(`HTTP error! status: ${initResponse.status}`);
+        }
+
+        const initResult = await initResponse.json();
+        console.log('👤 User init result:', initResult);
+
+        // Затем загружаем данные пользователя
+        const userResponse = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
+        
+        if (!userResponse.ok) {
+            throw new Error(`HTTP error! status: ${userResponse.status}`);
+        }
+        
+        const userData = await userResponse.json();
+        console.log('📊 User data loaded:', userData);
+        
+        if (userData.error) {
+            throw new Error(userData.error);
+        }
+        
+        // Обновляем интерфейс
+        updateUserInterface(userData);
+        showSuccess('✅ Данные успешно загружены!');
+
+    } catch (error) {
+        console.error('❌ Ошибка загрузки данных:', error);
+        showError('Ошибка загрузки данных: ' + error.message);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+// Уберите функцию showPreviewInterface
     // Обновление интерфейса пользователя
     function updateUserInterface(userData) {
         hasSubscription = userData.has_subscription || false;
