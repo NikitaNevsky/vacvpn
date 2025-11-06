@@ -37,23 +37,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS настройки
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://vacvpn-production.up.railway.app",
-        "https://web.telegram.org", 
-        "https://oauth.telegram.org",
-        "https://telegram.org",
-        "http://localhost:3000",
-        "http://localhost:8443",
-        "https://localhost:3000", 
-        "https://localhost:8443",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:8443",
-        "https://127.0.0.1:3000",
-        "https://127.0.0.1:8443"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -266,7 +253,7 @@ async def check_user_in_xray(user_uuid: str, server_id: str = None) -> bool:
                     response = await client.get(
                         f"{server_config['url']}/user/{user_uuid}",
                         headers={"X-API-Key": server_config["api_key"]},
-                        timeout=3.0
+                        timeout=3.0  # Уменьшили таймаут
                     )
                     
                     if response.status_code == 200:
@@ -381,7 +368,7 @@ def generate_user_uuid():
     return str(uuid.uuid4())
 
 async def ensure_user_uuid(user_id: str, server_id: str = None) -> str:
-    """Гарантирует что у пользователя есть UUID и он добавлен в Xray"""
+    """Гарантирует что у пользователя есть UUID и он добавлен в Xray - СУПЕР БЫСТРО"""
     if not db:
         raise Exception("Database not connected")
     
@@ -398,20 +385,25 @@ async def ensure_user_uuid(user_id: str, server_id: str = None) -> str:
         if vless_uuid:
             logger.info(f"🔍 User {user_id} has existing UUID: {vless_uuid}")
             
+            # БЫСТРОЕ ДОБАВЛЕНИЕ: не проверяем, просто добавляем
             servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
             
+            # Запускаем добавление асинхронно без ожидания
             asyncio.create_task(fast_add_to_xray(vless_uuid, servers_to_add))
             
             return vless_uuid
         
+        # Генерируем новый UUID
         new_uuid = generate_user_uuid()
         logger.info(f"🆕 Generating new UUID for user {user_id}: {new_uuid}")
         
+        # Обновляем пользователя
         user_ref.update({
             'vless_uuid': new_uuid,
             'updated_at': firestore.SERVER_TIMESTAMP
         })
         
+        # Быстро добавляем на серверы
         servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
         asyncio.create_task(fast_add_to_xray(new_uuid, servers_to_add))
         
@@ -660,7 +652,7 @@ def process_subscription_days(user_id: str) -> bool:
                     
                     if new_days == 0:
                         update_data['has_subscription'] = False
-                        update_data['subscription_end'] = datetime.now().isoformat()
+                        update_data['subscription_end'] = datetime.now().isoformat()  # Записываем конец подписки
                         if vless_uuid:
                             asyncio.create_task(remove_user_from_xray(vless_uuid))
                             user_vless_keys = get_user_vless_keys(user_id)
@@ -809,7 +801,7 @@ def extract_referrer_id(start_param: str) -> str:
     return start_param
 
 async def update_subscription_days(user_id: str, additional_days: int, server_id: str = None) -> bool:
-    """Обновление дней подписки с ГАРАНТИРОВАННЫМ добавлением в Xray"""
+    """Обновление дней подписки с ГАРАНТИРОВАННЫМ добавлением в Xray - БЫСТРО"""
     if not db: 
         return False
     try:
@@ -832,9 +824,11 @@ async def update_subscription_days(user_id: str, additional_days: int, server_id
                 'last_subscription_check': datetime.now().date().isoformat()
             }
             
+            # Записываем начало подписки, если это новая подписка
             if has_subscription and not user_data.get('subscription_start'):
                 update_data['subscription_start'] = datetime.now().isoformat()
             
+            # Рассчитываем дату окончания подписки
             if has_subscription:
                 subscription_end = datetime.now() + timedelta(days=new_days)
                 update_data['subscription_end'] = subscription_end.isoformat()
@@ -895,14 +889,12 @@ def generate_referral_link(user_id: str) -> str:
     """Генерирует реферальную ссылку для пользователя"""
     return f"https://t.me/vaaaac_bot?start=ref_{user_id}"
 
-async def run_bot_async():
-    """Запуск бота в том же процессе"""
+# Функция для запуска бота в отдельном процессе
+def run_bot():
+    """Запуск бота в отдельном процессе"""
     try:
-        logger.info("🤖 Starting Telegram bot in same process...")
-        await asyncio.sleep(2)
-        
-        from bot import run_bot
-        await run_bot()
+        logger.info("🤖 Starting Telegram bot in separate process...")
+        subprocess.run([sys.executable, "bot.py"], check=True)
     except Exception as e:
         logger.error(f"❌ Bot execution error: {e}")
 
@@ -914,11 +906,29 @@ async def startup_event():
     ensure_logo_exists()
     start_subscription_checker()
     
-    logger.info("🔄 Starting Telegram bot in background...")
-    asyncio.create_task(run_bot_async())
-    logger.info("✅ Telegram bot started in background")
+    logger.info("🔄 Starting Telegram bot automatically...")
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    logger.info("✅ Telegram bot started successfully")
 
-# Маршруты API
+# API ЭНДПОИНТЫ
+@app.get("/")
+async def root():
+    if os.path.exists("index.html"):
+        with open("index.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    
+    xray_users_count = await get_xray_users_count()
+    return {
+        "message": "VAC VPN API is running", 
+        "status": "ok",
+        "firebase": "connected" if db else "disconnected",
+        "xray_users": xray_users_count,
+        "available_servers": len(VLESS_SERVERS),
+        "environment": "production",
+        "timestamp": datetime.now().isoformat()
+    }
+
 @app.get("/health")
 async def health_check():
     xray_users_count = await get_xray_users_count()
@@ -985,18 +995,15 @@ async def clear_referrals(user_id: str):
         logger.error(f"❌ Error clearing referrals: {e}")
         return {"error": str(e)}
 
-# В функции init-user уберите блок обработки preview
 @app.post("/init-user")
 async def init_user(request: InitUserRequest):
     try:
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
-        # УДАЛИТЕ ЭТОТ БЛОК - обработку preview пользователей
         if not request.user_id or request.user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
         
-        # Остальной код оставляем без изменений...
         referrer_id = None
         is_referral = False
         bonus_applied = False
@@ -1040,6 +1047,7 @@ async def init_user(request: InitUserRequest):
             if is_referral and referrer_id:
                 user_data['referred_by'] = referrer_id
             
+            # Генерируем и сохраняем реферальную ссылку
             referral_link = generate_referral_link(request.user_id)
             user_data['referral_link'] = referral_link
             
@@ -1057,6 +1065,7 @@ async def init_user(request: InitUserRequest):
             user_data = user_doc.to_dict()
             has_referrer = user_data.get('referred_by') is not None
             
+            # Если у пользователя еще нет реферальной ссылки, генерируем и сохраняем её
             if not user_data.get('referral_link'):
                 referral_link = generate_referral_link(request.user_id)
                 save_referral_link(request.user_id, referral_link)
@@ -1082,33 +1091,11 @@ async def get_user_info(user_id: str):
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
-        # Обработка preview пользователя
-        if user_id.startswith('preview_'):
-            return {
-                "user_id": user_id,
-                "balance": 0,
-                "has_subscription": False,
-                "subscription_days": 0,
-                "vless_uuid": None,
-                "preferred_server": None,
-                "subscription_start": None,
-                "subscription_end": None,
-                "referral_link": None,
-                "vless_keys": [],
-                "referral_stats": {
-                    "total_referrals": 0,
-                    "total_bonus_money": 0,
-                    "referrer_bonus": REFERRAL_BONUS_REFERRER,
-                    "referred_bonus": REFERRAL_BONUS_REFERRED
-                },
-                "available_servers": VLESS_SERVERS,
-                "is_preview": True
-            }
-            
         if not user_id or user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
             
-        process_subscription_days(user_id)
+        # БЫСТРАЯ проверка подписки без блокировки
+        asyncio.create_task(process_subscription_days_async(user_id))
             
         user = get_user(user_id)
         if not user:
@@ -1160,7 +1147,15 @@ async def get_user_info(user_id: str):
         }
         
     except Exception as e:
+        logger.error(f"❌ Error in get_user_info: {e}")
         return JSONResponse(status_code=500, content={"error": f"Error getting user info: {str(e)}"})
+
+async def process_subscription_days_async(user_id: str):
+    """Асинхронная обработка дней подписки"""
+    try:
+        process_subscription_days(user_id)
+    except Exception as e:
+        logger.error(f"❌ Error in async subscription processing: {e}")
 
 @app.post("/add-balance")
 async def add_balance(request: AddBalanceRequest):
@@ -1526,7 +1521,8 @@ async def get_vless_config(user_id: str, server_id: str = None):
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
             
-        process_subscription_days(user_id)
+        # Асинхронная проверка подписки без блокировки
+        asyncio.create_task(process_subscription_days_async(user_id))
             
         user = get_user(user_id)
         if not user:
@@ -1535,8 +1531,10 @@ async def get_vless_config(user_id: str, server_id: str = None):
         if not user.get('has_subscription', False):
             return JSONResponse(status_code=400, content={"error": "No active subscription"})
         
+        # СУПЕР БЫСТРОЕ получение UUID
         vless_uuid = await ensure_user_uuid(user_id, server_id)
         
+        # Мгновенное создание конфигов
         configs = create_user_vless_configs(user_id, vless_uuid, server_id)
         
         return {
@@ -1678,7 +1676,7 @@ async def force_add_to_xray(user_id: str, server_id: str = None):
         if not vless_uuid:
             return JSONResponse(status_code=400, content={"error": "User has no UUID"})
         
-        success = await add_user_to_xray_server(server_id or "London", user_id, vless_uuid)
+        success = await add_user_to_xray_server(server_id, user_id, vless_uuid)
         
         if success:
             return {
@@ -1749,7 +1747,7 @@ async def admin_cancel_subscription(user_id: str):
             'has_subscription': False,
             'subscription_days': 0,
             'subscription_start': None,
-            'subscription_end': datetime.now().isoformat(),
+            'subscription_end': datetime.now().isoformat(),  # Записываем время окончания подписки
             'updated_at': firestore.SERVER_TIMESTAMP
         }
         
@@ -1786,6 +1784,7 @@ async def get_referral_link_endpoint(user_id: str):
         
         referral_link = user.get('referral_link')
         if not referral_link:
+            # Если ссылки нет, генерируем и сохраняем её
             referral_link = generate_referral_link(user_id)
             save_referral_link(user_id, referral_link)
         
@@ -1821,321 +1820,6 @@ async def get_referral_stats(user_id: str):
     except Exception as e:
         logger.error(f"❌ Error getting referral stats: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-@app.get("/", response_class=HTMLResponse)
-async def web_interface():
-    """Главная страница веб-интерфейса"""
-    html_content = """
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VAC VPN</title>
-  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
-  <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <style>
-    :root {
-      --primary: #B0CB1F;
-      --bg: #121212;
-      --text: #FFFFFF;
-      --card: #1E1E1E;
-    }
-    * {
-      font-family: 'Montserrat', sans-serif;
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      padding: 16px;
-      min-height: 100vh;
-    }
-    
-    .top-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 16px;
-    }
-    .logo-container {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-    }
-    .logo-placeholder {
-      height: 60px;
-      width: 120px;
-      background: var(--primary);
-      color: var(--bg);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: bold;
-      font-size: 14px;
-      text-align: center;
-      padding: 8px;
-      margin-bottom: 8px;
-    }
-    .top-bar-right {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .user-name {
-      font-size: 16px;
-      font-weight: 600;
-      margin-right: 4px;
-    }
-    .menu-btn {
-      font-size: 24px;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .card {
-      background: var(--card);
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-    }
-    
-    .balance-info {
-      background: rgba(176, 203, 31, 0.1);
-      border-radius: 8px;
-      padding: 12px;
-      margin: 8px 0;
-      font-size: 14px;
-    }
-    
-    .button {
-      display: block;
-      width: 100%;
-      padding: 12px;
-      text-align: center;
-      border-radius: 8px;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: none;
-      margin-bottom: 12px;
-    }
-    .button-yellow {
-      background: var(--primary);
-      color: var(--bg);
-    }
-    .button-yellow:active {
-      opacity: 0.9;
-      transform: scale(0.98);
-    }
-    .button-outline {
-      background: transparent;
-      color: var(--primary);
-      border: 2px solid var(--primary);
-      margin-bottom: 16px;
-    }
-    
-    .loading {
-      text-align: center;
-      margin: 10px 0;
-      color: var(--primary);
-    }
-    .error-message {
-      color: #ff4444;
-      font-size: 14px;
-      text-align: center;
-      margin-top: 10px;
-    }
-    .success-message {
-      color: var(--primary);
-      font-size: 14px;
-      text-align: center;
-      margin-top: 10px;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="top-bar">
-    <div class="logo-container">
-      <div class="logo-placeholder">
-        VAC VPN
-      </div>
-    </div>
-    <div class="top-bar-right">
-      <div class="user-name" id="userName">Загрузка...</div>
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="balance-info">
-      <div>💰 <strong>Баланс:</strong> <span id="userBalance">0</span>₽</div>
-    </div>
-    
-    <div class="balance-info" id="subscriptionInfo" style="display: none;">
-      <div>📅 <strong>Информация о подписке:</strong></div>
-      <div>Осталось дней: <strong id="subscriptionDays">0</strong></div>
-    </div>
-    
-    <button class="button button-yellow" onclick="loadUserData()">ОБНОВИТЬ ДАННЫЕ</button>
-    
-    <div class="loading" id="loadingIndicator" style="display: none;">Загрузка...</div>
-    <div class="error-message" id="errorMessage"></div>
-    <div class="success-message" id="successMessage"></div>
-  </div>
-
-  <script>
-    // Инициализация Telegram WebApp
-    let tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-
-    // Данные пользователя
-    const initData = tg.initDataUnsafe;
-    const userId = initData.user?.id?.toString() || 'unknown';
-    const userName = initData.user?.first_name || 'Пользователь';
-
-    // URL API
-    const API_BASE_URL = "https://vacvpn-production.up.railway.app";
-
-    console.log('👤 Telegram User Data:', { userId, userName });
-
-    // Обновляем имя пользователя
-    document.getElementById('userName').textContent = userName;
-
-    // Функция загрузки данных пользователя
-    async function loadUserData() {
-        try {
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            const errorMessage = document.getElementById('errorMessage');
-            const successMessage = document.getElementById('successMessage');
-            
-            errorMessage.style.display = 'none';
-            successMessage.style.display = 'none';
-            loadingIndicator.style.display = 'block';
-
-            console.log('🔄 Loading user data for:', userId);
-
-            // Сначала инициализируем пользователя
-            const initResponse = await fetch(`${API_BASE_URL}/init-user`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    username: initData.user?.username || "",
-                    first_name: userName,
-                    last_name: initData.user?.last_name || "",
-                    start_param: ""
-                })
-            });
-
-            if (!initResponse.ok) {
-                console.warn('⚠️ User init failed, trying to load data directly');
-            }
-
-            // Затем загружаем данные пользователя
-            const userResponse = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
-            
-            if (!userResponse.ok) {
-                throw new Error(`HTTP error! status: ${userResponse.status}`);
-            }
-            
-            const userData = await userResponse.json();
-            console.log('📊 User data loaded:', userData);
-            
-            if (userData.error && !userData.is_preview) {
-                throw new Error(userData.error);
-            }
-            
-            // Обновляем интерфейс
-            document.getElementById('userBalance').textContent = userData.balance?.toFixed(2) || '0';
-            
-            if (userData.has_subscription && userData.subscription_days > 0) {
-                document.getElementById('subscriptionInfo').style.display = 'block';
-                document.getElementById('subscriptionDays').textContent = userData.subscription_days;
-            } else {
-                document.getElementById('subscriptionInfo').style.display = 'none';
-            }
-            
-            if (userData.is_preview) {
-                showSuccess('👀 Режим предпросмотра. Для полного функционала откройте в боте.');
-            } else {
-                showSuccess('✅ Данные успешно загружены!');
-            }
-
-        } catch (error) {
-            console.error('❌ Ошибка загрузки данных:', error);
-            showError('Ошибка загрузки данных: ' + error.message);
-            
-            // Показываем базовый интерфейс даже при ошибке
-            showPreviewInterface();
-        } finally {
-            document.getElementById('loadingIndicator').style.display = 'none';
-        }
-    }
-
-    function showPreviewInterface() {
-        document.getElementById('userBalance').textContent = '0';
-        document.getElementById('subscriptionInfo').style.display = 'none';
-    }
-
-    function showError(message) {
-        const errorElement = document.getElementById('errorMessage');
-        errorElement.textContent = message;
-        errorElement.style.display = 'block';
-        setTimeout(() => {
-            errorElement.style.display = 'none';
-        }, 5000);
-    }
-
-    function showSuccess(message) {
-        const successElement = document.getElementById('successMessage');
-        successElement.textContent = message;
-        successElement.style.display = 'block';
-        setTimeout(() => {
-            successElement.style.display = 'none';
-        }, 5000);
-    }
-
-    // Автоматически загружаем данные при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('🚀 Starting VAC VPN WebApp...');
-        loadUserData();
-    });
-  </script>
-</body>
-</html>
-    """
-    return HTMLResponse(content=html_content)
-    
-@app.middleware("http")
-async def add_cors_headers(request: Request, call_next):
-    response = await call_next(request)
-    
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    response.headers["Access-Control-Allow-Credentials"] = "true"
-    
-    return response
-
-@app.options("/{path:path}")
-async def options_handler(path: str):
-    """Обработчик OPTIONS запросов для CORS"""
-    return JSONResponse(
-        status_code=200,
-        headers={
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-            "Access-Control-Allow-Headers": "*",
-        }
-    )
 
 if __name__ == "__main__":
     import uvicorn
