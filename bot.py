@@ -34,15 +34,16 @@ TOKEN = os.getenv("TOKEN")
 SUPPORT_NICK = os.getenv("SUPPORT_NICK", "@vacvpn_support")
 TG_CHANNEL = os.getenv("TG_CHANNEL", "@vac_vpn")
 
-# URL API и веб-приложения - используем Railway URL
+# URL API и веб-приложения
 RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "https://vacvpn-production.up.railway.app")
+
 if RAILWAY_STATIC_URL:
-    # Используем тот же URL что и для API
     API_BASE_URL = f"https://{RAILWAY_STATIC_URL}"
-    WEB_APP_URL = f"https://{RAILWAY_STATIC_URL}"  # ВАЖНО: тот же URL!
 else:
     API_BASE_URL = "http://localhost:8443"
-    WEB_APP_URL = "http://localhost:8443"
+if not WEB_APP_URL:
+    WEB_APP_URL = "https://vacvpn-production.up.railway.app"
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "vaaaac_bot")
 
