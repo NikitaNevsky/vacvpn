@@ -232,8 +232,12 @@ async def get_cabinet_message(user_id: int):
     total_referrals = referral_stats.get('total_referrals', 0)
     total_bonus_money = referral_stats.get('total_bonus_money', 0)
     
+    # ДОБАВЬТЕ URL ДЛЯ ПРЕВЬЮ-КНОПКИ
+    web_app_url = WEB_APP_URL
+    
     return f"""
 <b>Личный кабинет VAC VPN</b>
+<a href="{web_app_url}">‎</a>
 
 💰 Баланс: <b>{balance}₽</b>
 📅 Статус подписки: <b>{status_text}</b>
@@ -245,7 +249,6 @@ async def get_cabinet_message(user_id: int):
 
 💡 Для покупки подписки используйте веб-кабинет.
 """
-
 def get_ref_message(user_id: int):
     return f"""
 <b>Реферальная программа VAC VPN</b>
