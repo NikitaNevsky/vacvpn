@@ -36,18 +36,13 @@ TG_CHANNEL = os.getenv("TG_CHANNEL", "@vac_vpn")
 
 # URL API и веб-приложения
 RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
-WEB_APP_URL = os.getenv("WEB_APP_URL", "https://vacvpn-production.up.railway.app")
+WEB_APP_URL = "https://vacvpn.vercel.app"  # Фиксированный URL Vercel
 
 if RAILWAY_STATIC_URL:
     API_BASE_URL = f"https://{RAILWAY_STATIC_URL}"
 else:
     API_BASE_URL = "http://localhost:8443"
-if not WEB_APP_URL:
-    WEB_APP_URL = "https://vacvpn-production.up.railway.app"
 
-BOT_USERNAME = os.getenv("BOT_USERNAME", "vaaaac_bot")
-
-logger.info("🚀 Бот запускается на Railway...")
 logger.info(f"🌐 API сервер: {API_BASE_URL}")
 logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
 
