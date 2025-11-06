@@ -893,14 +893,15 @@ def generate_referral_link(user_id: str) -> str:
     """Генерирует реферальную ссылку для пользователя"""
     return f"https://t.me/vaaaac_bot?start=ref_{user_id}"
 
-# Функция для запуска бота в отдельном процессе
-# def run_bot():
-#     """Запуск бота в отдельном процессе"""
-#     try:
-#         logger.info("🤖 Starting Telegram bot in separate process...")
-#         subprocess.run([sys.executable, "bot.py"], check=True)
-#     except Exception as e:
-#         logger.error(f"❌ Bot execution error: {e}")
+async def run_bot_async():
+    """Запуск бота в том же процессе"""
+    try:
+        logger.info("🤖 Starting Telegram bot in same process...")
+        # Импортируем и запускаем бота
+        from bot import run_bot
+        await run_bot()
+    except Exception as e:
+        logger.error(f"❌ Bot execution error: {e}")
 
 @app.on_event("startup")
 async def startup_event():
@@ -909,11 +910,11 @@ async def startup_event():
     
     ensure_logo_exists()
     start_subscription_checker()
-    # logger.info("🔄 Starting Telegram bot automatically...")
-    # bot_thread = threading.Thread(target=run_bot, daemon=True)
-    # bot_thread.start()
-    # logger.info("✅ Telegram bot started successfully")
-
+    
+    # Запускаем бота в ФОНОВОМ РЕЖИМЕ
+    logger.info("🔄 Starting Telegram bot in background...")
+    asyncio.create_task(run_bot_async())
+    logger.info("✅ Telegram bot started in background")
 # API ЭНДПОИНТЫ
 @app.get("/")
 async def root():
