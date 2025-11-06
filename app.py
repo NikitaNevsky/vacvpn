@@ -40,12 +40,20 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://vacvpn-production.up.railway.app",  
-        "https://web.telegram.org",
+        "https://vacvpn-production.up.railway.app",
+        "https://web.telegram.org", 
         "https://oauth.telegram.org",
+        "http://localhost:3000",
+        "http://localhost:8443",
+        "https://localhost:3000",
+        "https://localhost:8443",
+        "http://127.0.0.1:3000", 
+        "http://127.0.0.1:8443",
+        "https://127.0.0.1:3000",
+        "https://127.0.0.1:8443",
     ],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 # Монтируем статические файлы
@@ -2096,6 +2104,30 @@ async def web_interface():
 </html>
     """
     return HTMLResponse(content=html_content)
+    
+@app.middleware("http")
+async def add_cors_headers(request: Request, call_next):
+    response = await call_next(request)
+    
+    # Добавляем CORS заголовки ко всем ответам
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    
+    return response
+@app.options("/{path:path}")
+async def options_handler(path: str):
+    """Обработчик OPTIONS запросов для CORS"""
+    return JSONResponse(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    )
+
 
 if __name__ == "__main__":
     import uvicorn
