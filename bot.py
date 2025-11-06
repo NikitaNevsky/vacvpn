@@ -36,17 +36,18 @@ TG_CHANNEL = os.getenv("TG_CHANNEL", "@vac_vpn")
 BOT_USERNAME = os.getenv("BOT_USERNAME", "vaaaac_bot")
 
 # URL API и веб-приложения
+# URL API и веб-приложения
 RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
-WEB_APP_URL = "https://vacvpn.vercel.app"  # Фиксированный URL Vercel
 
 if RAILWAY_STATIC_URL:
     API_BASE_URL = f"https://{RAILWAY_STATIC_URL}"
+    WEB_APP_URL = f"https://{RAILWAY_STATIC_URL}"  # Тот же URL что и API
 else:
     API_BASE_URL = "http://localhost:8443"
+    WEB_APP_URL = "http://localhost:8443"
 
 logger.info(f"🌐 API сервер: {API_BASE_URL}")
 logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
-
 # Настройка бота
 bot = Bot(
     token=TOKEN, 
@@ -232,12 +233,9 @@ async def get_cabinet_message(user_id: int):
     total_referrals = referral_stats.get('total_referrals', 0)
     total_bonus_money = referral_stats.get('total_bonus_money', 0)
     
-    # ДОБАВЬТЕ URL ДЛЯ ПРЕВЬЮ-КНОПКИ (Railway домен)
-    api_url = API_BASE_URL
-    
     return f"""
 <b>Личный кабинет VAC VPN</b>
-<a href="{api_url}">‎</a>
+<a href="{WEB_APP_URL}">‎</a>
 
 💰 Баланс: <b>{balance}₽</b>
 📅 Статус подписки: <b>{status_text}</b>
