@@ -33,23 +33,21 @@ if not os.getenv('TOKEN'):
 TOKEN = os.getenv("TOKEN")
 SUPPORT_NICK = os.getenv("SUPPORT_NICK", "@vacvpn_support")
 TG_CHANNEL = os.getenv("TG_CHANNEL", "@vac_vpn")
+WEB_APP_URL = os.getenv("WEB_APP_URL", "http://localhost:8443")
 
-# URL API и веб-приложения - используем Railway URL
-RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
-if RAILWAY_STATIC_URL:
-    # Используем тот же URL что и для API
-    API_BASE_URL = f"https://{RAILWAY_STATIC_URL}"
-    WEB_APP_URL = f"https://{RAILWAY_STATIC_URL}"  # ВАЖНО: тот же URL!
-else:
-    API_BASE_URL = "http://localhost:8443"
-    WEB_APP_URL = "http://localhost:8443"
+# Если WEB_APP_URL не установлен, пробуем получить из Railway
+if not WEB_APP_URL or WEB_APP_URL == "http://localhost:8443":
+    RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
+    if RAILWAY_STATIC_URL:
+        WEB_APP_URL = f"https://{RAILWAY_STATIC_URL}"
+
+API_BASE_URL = WEB_APP_URL  # Используем тот же URL для API
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "vaaaac_bot")
 
 logger.info("🚀 Бот запускается на Railway...")
 logger.info(f"🌐 API сервер: {API_BASE_URL}")
 logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
-
 # Настройка бота
 bot = Bot(
     token=TOKEN, 
