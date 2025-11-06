@@ -38,14 +38,18 @@ app = FastAPI(
 )
 
 # CORS middleware
+# CORS middleware - РАЗРЕШАЕМ ТОЛЬКО НУЖНЫЕ ДОМЕНЫ
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://vacvpn.vercel.app",
+        "https://web.telegram.org",
+        "https://oauth.telegram.org",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
-
 # Монтируем статические файлы
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
