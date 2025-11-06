@@ -1814,6 +1814,288 @@ async def get_referral_stats(user_id: str):
     except Exception as e:
         logger.error(f"❌ Error getting referral stats: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+@app.get("/", response_class=HTMLResponse)
+async def web_interface():
+    """Главная страница веб-интерфейса"""
+    html_content = """
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VAC VPN</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root {
+      --primary: #B0CB1F;
+      --bg: #121212;
+      --text: #FFFFFF;
+      --card: #1E1E1E;
+    }
+    * {
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      min-height: 100vh;
+    }
+    
+    .top-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 16px;
+    }
+    .logo-container {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .logo-placeholder {
+      height: 60px;
+      width: 120px;
+      background: var(--primary);
+      color: var(--bg);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 14px;
+      text-align: center;
+      padding: 8px;
+      margin-bottom: 8px;
+    }
+    .top-bar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .user-name {
+      font-size: 16px;
+      font-weight: 600;
+      margin-right: 4px;
+    }
+    .menu-btn {
+      font-size: 24px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .balance-info {
+      background: rgba(176, 203, 31, 0.1);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0;
+      font-size: 14px;
+    }
+    
+    .button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      text-align: center;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      margin-bottom: 12px;
+    }
+    .button-yellow {
+      background: var(--primary);
+      color: var(--bg);
+    }
+    .button-yellow:active {
+      opacity: 0.9;
+      transform: scale(0.98);
+    }
+    .button-outline {
+      background: transparent;
+      color: var(--primary);
+      border: 2px solid var(--primary);
+      margin-bottom: 16px;
+    }
+    
+    .loading {
+      text-align: center;
+      margin: 10px 0;
+      color: var(--primary);
+    }
+    .error-message {
+      color: #ff4444;
+      font-size: 14px;
+      text-align: center;
+      margin-top: 10px;
+    }
+    .success-message {
+      color: var(--primary);
+      font-size: 14px;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <div class="logo-container">
+      <div class="logo-placeholder">
+        VAC VPN
+      </div>
+    </div>
+    <div class="top-bar-right">
+      <div class="user-name" id="userName">Загрузка...</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="balance-info">
+      <div>💰 <strong>Баланс:</strong> <span id="userBalance">0</span>₽</div>
+    </div>
+    
+    <div class="balance-info" id="subscriptionInfo" style="display: none;">
+      <div>📅 <strong>Информация о подписке:</strong></div>
+      <div>Осталось дней: <strong id="subscriptionDays">0</strong></div>
+    </div>
+    
+    <button class="button button-yellow" onclick="loadUserData()">ОБНОВИТЬ ДАННЫЕ</button>
+    
+    <div class="loading" id="loadingIndicator" style="display: none;">Загрузка...</div>
+    <div class="error-message" id="errorMessage"></div>
+    <div class="success-message" id="successMessage"></div>
+  </div>
+
+  <script>
+    // Инициализация Telegram WebApp
+    let tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    // Данные пользователя
+    const initData = tg.initDataUnsafe;
+    const userId = initData.user?.id?.toString() || 'unknown';
+    const userName = initData.user?.first_name || 'Пользователь';
+
+    // URL API
+    const API_BASE_URL = "https://vacvpn-production.up.railway.app";
+
+    console.log('👤 Telegram User Data:', { userId, userName });
+
+    // Обновляем имя пользователя
+    document.getElementById('userName').textContent = userName;
+
+    // Функция загрузки данных пользователя
+    async function loadUserData() {
+        try {
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+            
+            errorMessage.style.display = 'none';
+            successMessage.style.display = 'none';
+            loadingIndicator.style.display = 'block';
+
+            console.log('🔄 Loading user data for:', userId);
+
+            // Сначала инициализируем пользователя
+            const initResponse = await fetch(`${API_BASE_URL}/init-user`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    username: initData.user?.username || "",
+                    first_name: userName,
+                    last_name: initData.user?.last_name || "",
+                    start_param: ""
+                })
+            });
+
+            if (!initResponse.ok) {
+                throw new Error(`HTTP error! status: ${initResponse.status}`);
+            }
+
+            const initResult = await initResponse.json();
+            console.log('👤 User init result:', initResult);
+
+            // Затем загружаем данные пользователя
+            const userResponse = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
+            
+            if (!userResponse.ok) {
+                throw new Error(`HTTP error! status: ${userResponse.status}`);
+            }
+            
+            const userData = await userResponse.json();
+            console.log('📊 User data loaded:', userData);
+            
+            if (userData.error) {
+                throw new Error(userData.error);
+            }
+            
+            // Обновляем интерфейс
+            document.getElementById('userBalance').textContent = userData.balance?.toFixed(2) || '0';
+            
+            if (userData.has_subscription && userData.subscription_days > 0) {
+                document.getElementById('subscriptionInfo').style.display = 'block';
+                document.getElementById('subscriptionDays').textContent = userData.subscription_days;
+            } else {
+                document.getElementById('subscriptionInfo').style.display = 'none';
+            }
+            
+            showSuccess('✅ Данные успешно загружены!');
+
+        } catch (error) {
+            console.error('❌ Ошибка загрузки данных:', error);
+            showError('Ошибка загрузки данных: ' + error.message);
+        } finally {
+            document.getElementById('loadingIndicator').style.display = 'none';
+        }
+    }
+
+    function showError(message) {
+        const errorElement = document.getElementById('errorMessage');
+        errorElement.textContent = message;
+        errorElement.style.display = 'block';
+        setTimeout(() => {
+            errorElement.style.display = 'none';
+        }, 5000);
+    }
+
+    function showSuccess(message) {
+        const successElement = document.getElementById('successMessage');
+        successElement.textContent = message;
+        successElement.style.display = 'block';
+        setTimeout(() => {
+            successElement.style.display = 'none';
+        }, 5000);
+    }
+
+    // Автоматически загружаем данные при загрузке страницы
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🚀 Starting VAC VPN WebApp...');
+        loadUserData();
+    });
+  </script>
+</body>
+</html>
+    """
+    return HTMLResponse(content=html_content)
 
 if __name__ == "__main__":
     import uvicorn
