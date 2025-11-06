@@ -1606,13 +1606,6 @@ async function loadUserData() {
         }
     }
 
-    function showPreviewInterface() {
-        document.getElementById('userBalance').textContent = '0';
-        document.getElementById('subscriptionInfo').style.display = 'none';
-        document.getElementById('subscriptionBadge').textContent = 'Неактивна';
-        document.getElementById('subscriptionBadge').className = 'badge inactive-badge';
-    }
-
     // Вспомогательные функции
     function scrollToTariffs() {
         document.getElementById('tariffBlock').scrollIntoView({ behavior: 'smooth' });
