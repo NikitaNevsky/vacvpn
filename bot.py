@@ -7,7 +7,7 @@ from aiogram import Bot, Dispatcher, types, F
 from aiogram.enums import ParseMode
 from aiogram.filters import Command
 from aiogram.client.default import DefaultBotProperties
-from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder, WebAppInfo
+from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 import logging
 
 # Настройка логирования
@@ -33,6 +33,8 @@ if not os.getenv('TOKEN'):
 TOKEN = os.getenv("TOKEN")
 SUPPORT_NICK = os.getenv("SUPPORT_NICK", "@vacvpn_support")
 TG_CHANNEL = os.getenv("TG_CHANNEL", "@vac_vpn")
+
+# URL API и веб-приложения
 WEB_APP_URL = os.getenv("WEB_APP_URL", "http://localhost:8443")
 
 # Если WEB_APP_URL не установлен, пробуем получить из Railway
@@ -45,9 +47,10 @@ API_BASE_URL = WEB_APP_URL  # Используем тот же URL для API
 
 BOT_USERNAME = os.getenv("BOT_USERNAME", "vaaaac_bot")
 
-logger.info("🚀 Бот запускается на Railway...")
+logger.info("🚀 Бот запускается...")
 logger.info(f"🌐 API сервер: {API_BASE_URL}")
 logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
+
 # Настройка бота
 bot = Bot(
     token=TOKEN, 
@@ -58,13 +61,6 @@ dp = Dispatcher()
 async def make_api_request(endpoint: str, method: str = "GET", json_data: dict = None, params: dict = None):
     """Упрощенная функция для запросов к API"""
     try:
-        # Используем тот же URL что и веб-сервер
-        RAILWAY_STATIC_URL = os.getenv("RAILWAY_STATIC_URL")
-        if RAILWAY_STATIC_URL:
-            API_BASE_URL = f"https://{RAILWAY_STATIC_URL}"
-        else:
-            API_BASE_URL = "http://localhost:8443"
-            
         url = f"{API_BASE_URL}{endpoint}"
         timeout_config = httpx.Timeout(30.0, connect=10.0)
         
@@ -130,10 +126,7 @@ def get_main_keyboard():
     )
     builder.row(
         types.KeyboardButton(text="🛠️ Техподдержка"),
-        types.KeyboardButton(text="🌐 Веб-кабинет")
-    )
-    builder.row(
-        types.KeyboardButton(text="🔧 VLESS Конфиг")
+        types.KeyboardButton(text="🔧 VLESS Конфиг")  # Переместили сюда вместо "🌐 Веб-кабинет"
     )
     return builder.as_markup(resize_keyboard=True)
 
@@ -142,7 +135,7 @@ def get_cabinet_keyboard():
     builder.row(
         types.InlineKeyboardButton(
             text="📲 Открыть веб-кабинет",
-            web_app=WebAppInfo(url=WEB_APP_URL)
+            url=WEB_APP_URL  # Обычная ссылка вместо WebApp
         )
     )
     builder.row(
@@ -397,25 +390,11 @@ async def referral_handler(message: types.Message):
 async def support_handler(message: types.Message):
     await cmd_support(message)
 
-@dp.message(F.text == "🌐 Веб-кабинет")
-async def web_app_handler(message: types.Message):
-    user = message.from_user
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        types.InlineKeyboardButton(
-            text="📲 Открыть веб-кабинет",
-            web_app=WebAppInfo(url=WEB_APP_URL)
-        )
-    )
-    await message.answer(
-        f"🌐 <b>Веб-кабинет VAC VPN</b>\n\n"
-        f"Для покупки подписки и управления аккаунтом откройте веб-кабинет:",
-        reply_markup=builder.as_markup()
-    )
-
 @dp.message(F.text == "🔧 VLESS Конфиг")
 async def vless_handler(message: types.Message):
     await cmd_vless(message)
+
+# Убрали обработчик для "🌐 Веб-кабинет"
 
 # Обработчики callback-кнопок
 @dp.callback_query(F.data == "back_to_menu")
