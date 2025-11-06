@@ -527,8 +527,10 @@ async def errors_handler(update: types.Update, exception: Exception):
     logger.error(f"Ошибка при обработке обновления {update}: {exception}")
     return True
 
-# Запуск бота
 async def run_bot():
+    # ДОБАВЬТЕ ЭТУ СТРОКУ ДЛЯ ПРОВЕРКИ ВЕРСИИ
+    logger.info("🔄 BOT VERSION 2.0 - WEB PREVIEW DISABLED")
+    
     logger.info("🤖 Бот VAC VPN запускается...")
     logger.info(f"🌐 API сервер: {API_BASE_URL}")
     logger.info(f"🌐 Веб-приложение: {WEB_APP_URL}")
