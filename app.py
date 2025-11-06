@@ -897,6 +897,9 @@ async def run_bot_async():
     """Запуск бота в том же процессе"""
     try:
         logger.info("🤖 Starting Telegram bot in same process...")
+        # Даем время API полностью запуститься
+        await asyncio.sleep(2)
+        
         # Импортируем и запускаем бота
         from bot import run_bot
         await run_bot()
@@ -915,7 +918,6 @@ async def startup_event():
     logger.info("🔄 Starting Telegram bot in background...")
     asyncio.create_task(run_bot_async())
     logger.info("✅ Telegram bot started in background")
-# API ЭНДПОИНТЫ
 @app.get("/")
 async def root():
     if os.path.exists("index.html"):
