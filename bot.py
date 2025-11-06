@@ -126,18 +126,13 @@ def get_main_keyboard():
     )
     builder.row(
         types.KeyboardButton(text="🛠️ Техподдержка"),
-        types.KeyboardButton(text="🔧 VLESS Конфиг")  # Переместили сюда вместо "🌐 Веб-кабинет"
+        types.KeyboardButton(text="🔧 VLESS Конфиг")
     )
+    # УБРАНА кнопка "VAC VPN" из Reply-клавиатуры
     return builder.as_markup(resize_keyboard=True)
 
 def get_cabinet_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.row(
-        types.InlineKeyboardButton(
-            text="📲 Открыть веб-кабинет",
-            url=WEB_APP_URL  # Обычная ссылка вместо WebApp
-        )
-    )
     builder.row(
         types.InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_cabinet"),
         types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")
@@ -393,8 +388,6 @@ async def support_handler(message: types.Message):
 @dp.message(F.text == "🔧 VLESS Конфиг")
 async def vless_handler(message: types.Message):
     await cmd_vless(message)
-
-# Убрали обработчик для "🌐 Веб-кабинет"
 
 # Обработчики callback-кнопок
 @dp.callback_query(F.data == "back_to_menu")
