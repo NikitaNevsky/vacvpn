@@ -37,12 +37,14 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS настройки
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://vacvpn-production.up.railway.app",
         "https://web.telegram.org", 
         "https://oauth.telegram.org",
+        "https://telegram.org",
         "http://localhost:3000",
         "http://localhost:8443",
         "https://localhost:3000",
@@ -51,16 +53,17 @@ app.add_middleware(
         "http://127.0.0.1:8443",
         "https://127.0.0.1:3000",
         "https://127.0.0.1:8443",
+        "*"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 # Монтируем статические файлы
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Конфигурация серверов
 # Конфигурация серверов
 XRAY_SERVERS = {
     "London": {
@@ -264,7 +267,7 @@ async def check_user_in_xray(user_uuid: str, server_id: str = None) -> bool:
                     response = await client.get(
                         f"{server_config['url']}/user/{user_uuid}",
                         headers={"X-API-Key": server_config["api_key"]},
-                        timeout=3.0  # Уменьшили таймаут
+                        timeout=3.0
                     )
                     
                     if response.status_code == 200:
@@ -320,6 +323,7 @@ async def add_user_to_xray_server(server_id: str, user_id: str, user_uuid: str) 
     except Exception as e:
         logger.error(f"❌ Error calling Xray API for {server_id}: {e}")
         return False
+
 async def remove_user_from_xray(user_uuid: str, server_id: str = None) -> bool:
     """Удалить пользователя из Xray сервер(ы)"""
     try:
@@ -378,7 +382,7 @@ def generate_user_uuid():
     return str(uuid.uuid4())
 
 async def ensure_user_uuid(user_id: str, server_id: str = None) -> str:
-    """Гарантирует что у пользователя есть UUID и он добавлен в Xray - СУПЕР БЫСТРО"""
+    """Гарантирует что у пользователя есть UUID и он добавлен в Xray"""
     if not db:
         raise Exception("Database not connected")
     
@@ -395,25 +399,20 @@ async def ensure_user_uuid(user_id: str, server_id: str = None) -> str:
         if vless_uuid:
             logger.info(f"🔍 User {user_id} has existing UUID: {vless_uuid}")
             
-            # БЫСТРОЕ ДОБАВЛЕНИЕ: не проверяем, просто добавляем
             servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
             
-            # Запускаем добавление асинхронно без ожидания
             asyncio.create_task(fast_add_to_xray(vless_uuid, servers_to_add))
             
             return vless_uuid
         
-        # Генерируем новый UUID
         new_uuid = generate_user_uuid()
         logger.info(f"🆕 Generating new UUID for user {user_id}: {new_uuid}")
         
-        # Обновляем пользователя
         user_ref.update({
             'vless_uuid': new_uuid,
             'updated_at': firestore.SERVER_TIMESTAMP
         })
         
-        # Быстро добавляем на серверы
         servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
         asyncio.create_task(fast_add_to_xray(new_uuid, servers_to_add))
         
@@ -662,7 +661,7 @@ def process_subscription_days(user_id: str) -> bool:
                     
                     if new_days == 0:
                         update_data['has_subscription'] = False
-                        update_data['subscription_end'] = datetime.now().isoformat()  # Записываем конец подписки
+                        update_data['subscription_end'] = datetime.now().isoformat()
                         if vless_uuid:
                             asyncio.create_task(remove_user_from_xray(vless_uuid))
                             user_vless_keys = get_user_vless_keys(user_id)
@@ -811,7 +810,7 @@ def extract_referrer_id(start_param: str) -> str:
     return start_param
 
 async def update_subscription_days(user_id: str, additional_days: int, server_id: str = None) -> bool:
-    """Обновление дней подписки с ГАРАНТИРОВАННЫМ добавлением в Xray - БЫСТРО"""
+    """Обновление дней подписки с ГАРАНТИРОВАННЫМ добавлением в Xray"""
     if not db: 
         return False
     try:
@@ -834,11 +833,9 @@ async def update_subscription_days(user_id: str, additional_days: int, server_id
                 'last_subscription_check': datetime.now().date().isoformat()
             }
             
-            # Записываем начало подписки, если это новая подписка
             if has_subscription and not user_data.get('subscription_start'):
                 update_data['subscription_start'] = datetime.now().isoformat()
             
-            # Рассчитываем дату окончания подписки
             if has_subscription:
                 subscription_end = datetime.now() + timedelta(days=new_days)
                 update_data['subscription_end'] = subscription_end.isoformat()
@@ -903,10 +900,8 @@ async def run_bot_async():
     """Запуск бота в том же процессе"""
     try:
         logger.info("🤖 Starting Telegram bot in same process...")
-        # Даем время API полностью запуститься
         await asyncio.sleep(2)
         
-        # Импортируем и запускаем бота
         from bot import run_bot
         await run_bot()
     except Exception as e:
@@ -920,27 +915,11 @@ async def startup_event():
     ensure_logo_exists()
     start_subscription_checker()
     
-    # Запускаем бота в ФОНОВОМ РЕЖИМЕ
     logger.info("🔄 Starting Telegram bot in background...")
     asyncio.create_task(run_bot_async())
     logger.info("✅ Telegram bot started in background")
-@app.get("/")
-async def root():
-    if os.path.exists("index.html"):
-        with open("index.html", "r", encoding="utf-8") as f:
-            return HTMLResponse(content=f.read())
-    
-    xray_users_count = await get_xray_users_count()
-    return {
-        "message": "VAC VPN API is running", 
-        "status": "ok",
-        "firebase": "connected" if db else "disconnected",
-        "xray_users": xray_users_count,
-        "available_servers": len(VLESS_SERVERS),
-        "environment": "production",
-        "timestamp": datetime.now().isoformat()
-    }
 
+# Маршруты API
 @app.get("/health")
 async def health_check():
     xray_users_count = await get_xray_users_count()
@@ -1013,8 +992,40 @@ async def init_user(request: InitUserRequest):
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
+        # Обработка случая Preview-режима
         if not request.user_id or request.user_id == 'unknown':
-            return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
+            # Создаем временного пользователя для Preview
+            preview_user_id = f"preview_{int(datetime.now().timestamp())}"
+            
+            user_data = {
+                'user_id': preview_user_id,
+                'username': "preview_user",
+                'first_name': "Preview",
+                'last_name': "User", 
+                'balance': 0.0,
+                'has_subscription': False,
+                'subscription_days': 0,
+                'subscription_start': None,
+                'subscription_end': None,
+                'vless_uuid': None,
+                'preferred_server': None,
+                'last_subscription_check': datetime.now().date().isoformat(),
+                'created_at': firestore.SERVER_TIMESTAMP,
+                'is_preview': True
+            }
+            
+            user_ref = db.collection('users').document(preview_user_id)
+            user_ref.set(user_data)
+            
+            return {
+                "success": True, 
+                "message": "Preview user created",
+                "user_id": preview_user_id,
+                "is_preview": True,
+                "is_referral": False,
+                "bonus_applied": False,
+                "referral_link": None
+            }
         
         referrer_id = None
         is_referral = False
@@ -1059,7 +1070,6 @@ async def init_user(request: InitUserRequest):
             if is_referral and referrer_id:
                 user_data['referred_by'] = referrer_id
             
-            # Генерируем и сохраняем реферальную ссылку
             referral_link = generate_referral_link(request.user_id)
             user_data['referral_link'] = referral_link
             
@@ -1077,7 +1087,6 @@ async def init_user(request: InitUserRequest):
             user_data = user_doc.to_dict()
             has_referrer = user_data.get('referred_by') is not None
             
-            # Если у пользователя еще нет реферальной ссылки, генерируем и сохраняем её
             if not user_data.get('referral_link'):
                 referral_link = generate_referral_link(request.user_id)
                 save_referral_link(request.user_id, referral_link)
@@ -1103,6 +1112,29 @@ async def get_user_info(user_id: str):
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
+        # Обработка preview пользователя
+        if user_id.startswith('preview_'):
+            return {
+                "user_id": user_id,
+                "balance": 0,
+                "has_subscription": False,
+                "subscription_days": 0,
+                "vless_uuid": None,
+                "preferred_server": None,
+                "subscription_start": None,
+                "subscription_end": None,
+                "referral_link": None,
+                "vless_keys": [],
+                "referral_stats": {
+                    "total_referrals": 0,
+                    "total_bonus_money": 0,
+                    "referrer_bonus": REFERRAL_BONUS_REFERRER,
+                    "referred_bonus": REFERRAL_BONUS_REFERRED
+                },
+                "available_servers": VLESS_SERVERS,
+                "is_preview": True
+            }
+            
         if not user_id or user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
             
@@ -1249,7 +1281,7 @@ async def activate_tariff(request: ActivateTariffRequest):
         tariff_price = tariff_data["price"]
         tariff_days = tariff_data["days"]
         
-        selected_server = request.selected_server or user.get('preferred_server') or "moscow"
+        selected_server = request.selected_server or user.get('preferred_server') or "London"
         
         if request.payment_method == "balance":
             user_balance = user.get('balance', 0.0)
@@ -1359,7 +1391,7 @@ async def buy_with_balance(request: BuyWithBalanceRequest):
         if not user:
             return JSONResponse(status_code=404, content={"error": "User not found"})
         
-        selected_server = request.selected_server or "moscow"
+        selected_server = request.selected_server or "London"
         
         user_balance = user.get('balance', 0.0)
         
@@ -1533,10 +1565,8 @@ async def get_vless_config(user_id: str, server_id: str = None):
         if not user.get('has_subscription', False):
             return JSONResponse(status_code=400, content={"error": "No active subscription"})
         
-        # СУПЕР БЫСТРОЕ получение UUID
         vless_uuid = await ensure_user_uuid(user_id, server_id)
         
-        # Мгновенное создание конфигов
         configs = create_user_vless_configs(user_id, vless_uuid, server_id)
         
         return {
@@ -1678,7 +1708,7 @@ async def force_add_to_xray(user_id: str, server_id: str = None):
         if not vless_uuid:
             return JSONResponse(status_code=400, content={"error": "User has no UUID"})
         
-        success = await add_user_to_xray(vless_uuid, server_id)
+        success = await add_user_to_xray_server(server_id or "London", user_id, vless_uuid)
         
         if success:
             return {
@@ -1709,7 +1739,7 @@ async def emergency_add_to_xray(user_id: str):
         success_count = 0
         for server_name, server_config in XRAY_SERVERS.items():
             try:
-                success = await add_user_to_xray(vless_uuid, server_name)
+                success = await add_user_to_xray_server(server_name, user_id, vless_uuid)
                 if success:
                     success_count += 1
             except Exception as e:
@@ -1749,7 +1779,7 @@ async def admin_cancel_subscription(user_id: str):
             'has_subscription': False,
             'subscription_days': 0,
             'subscription_start': None,
-            'subscription_end': datetime.now().isoformat(),  # Записываем время окончания подписки
+            'subscription_end': datetime.now().isoformat(),
             'updated_at': firestore.SERVER_TIMESTAMP
         }
         
@@ -1786,7 +1816,6 @@ async def get_referral_link_endpoint(user_id: str):
         
         referral_link = user.get('referral_link')
         if not referral_link:
-            # Если ссылки нет, генерируем и сохраняем её
             referral_link = generate_referral_link(user_id)
             save_referral_link(user_id, referral_link)
         
@@ -1822,6 +1851,7 @@ async def get_referral_stats(user_id: str):
     except Exception as e:
         logger.error(f"❌ Error getting referral stats: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
 @app.get("/", response_class=HTMLResponse)
 async def web_interface():
     """Главная страница веб-интерфейса"""
@@ -2036,11 +2066,8 @@ async def web_interface():
             });
 
             if (!initResponse.ok) {
-                throw new Error(`HTTP error! status: ${initResponse.status}`);
+                console.warn('⚠️ User init failed, trying to load data directly');
             }
-
-            const initResult = await initResponse.json();
-            console.log('👤 User init result:', initResult);
 
             // Затем загружаем данные пользователя
             const userResponse = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
@@ -2052,7 +2079,7 @@ async def web_interface():
             const userData = await userResponse.json();
             console.log('📊 User data loaded:', userData);
             
-            if (userData.error) {
+            if (userData.error && !userData.is_preview) {
                 throw new Error(userData.error);
             }
             
@@ -2066,14 +2093,26 @@ async def web_interface():
                 document.getElementById('subscriptionInfo').style.display = 'none';
             }
             
-            showSuccess('✅ Данные успешно загружены!');
+            if (userData.is_preview) {
+                showSuccess('👀 Режим предпросмотра. Для полного функционала откройте в боте.');
+            } else {
+                showSuccess('✅ Данные успешно загружены!');
+            }
 
         } catch (error) {
             console.error('❌ Ошибка загрузки данных:', error);
             showError('Ошибка загрузки данных: ' + error.message);
+            
+            // Показываем базовый интерфейс даже при ошибке
+            showPreviewInterface();
         } finally {
             document.getElementById('loadingIndicator').style.display = 'none';
         }
+    }
+
+    function showPreviewInterface() {
+        document.getElementById('userBalance').textContent = '0';
+        document.getElementById('subscriptionInfo').style.display = 'none';
     }
 
     function showError(message) {
@@ -2109,13 +2148,13 @@ async def web_interface():
 async def add_cors_headers(request: Request, call_next):
     response = await call_next(request)
     
-    # Добавляем CORS заголовки ко всем ответам
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "*"
     response.headers["Access-Control-Allow-Credentials"] = "true"
     
     return response
+
 @app.options("/{path:path}")
 async def options_handler(path: str):
     """Обработчик OPTIONS запросов для CORS"""
@@ -2127,7 +2166,6 @@ async def options_handler(path: str):
             "Access-Control-Allow-Headers": "*",
         }
     )
-
 
 if __name__ == "__main__":
     import uvicorn
