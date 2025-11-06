@@ -125,19 +125,35 @@ async def send_referral_notification(referrer_id: int, referred_user):
 
 # Клавиатуры
 def get_main_keyboard():
+    """Главное меню как на первом скрине - только одна кнопка VAC VPN"""
     builder = ReplyKeyboardBuilder()
     builder.row(
-        types.KeyboardButton(text="🔐 Личный кабинет"),
-        types.KeyboardButton(text="👥 Рефералка")
+        types.KeyboardButton(text="VAC VPN")
     )
     builder.row(
-        types.KeyboardButton(text="🛠️ Техподдержка"),
-        types.KeyboardButton(text="🌐 Веб-кабинет")
+        types.KeyboardButton(text="/invite"),
+        types.KeyboardButton(text="/help")
     )
     builder.row(
-        types.KeyboardButton(text="🔧 VLESS Конфиг")
+        types.KeyboardButton(text="/privacy")
     )
     return builder.as_markup(resize_keyboard=True)
+
+def get_vac_vpn_menu_keyboard():
+    """Подменю VAC VPN как на втором скрине"""
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(text="🔐 Личный кабинет", callback_data="personal_cabinet"),
+        types.InlineKeyboardButton(text="🛠️ Техподдержка", callback_data="support")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="👥 Рефералка", callback_data="referral"),
+        types.InlineKeyboardButton(text="🌐 Веб-кабинет", callback_data="web_cabinet")
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="🔧 VLESS Конфиг", callback_data="vless_config")
+    )
+    return builder.as_markup()
 
 def get_cabinet_keyboard():
     builder = InlineKeyboardBuilder()
@@ -149,7 +165,7 @@ def get_cabinet_keyboard():
     )
     builder.row(
         types.InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_cabinet"),
-        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_vac_menu")
     )
     return builder.as_markup()
 
@@ -163,7 +179,7 @@ def get_ref_keyboard(user_id: int):
     )
     builder.row(
         types.InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_refs"),
-        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_vac_menu")
     )
     return builder.as_markup()
 
@@ -176,7 +192,7 @@ def get_support_keyboard():
         )
     )
     builder.row(
-        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_vac_menu")
     )
     return builder.as_markup()
 
@@ -184,7 +200,20 @@ def get_vless_keyboard():
     builder = InlineKeyboardBuilder()
     builder.row(
         types.InlineKeyboardButton(text="🔄 Обновить", callback_data="refresh_vless"),
-        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_menu")
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_vac_menu")
+    )
+    return builder.as_markup()
+
+def get_web_cabinet_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        types.InlineKeyboardButton(
+            text="📲 Открыть веб-кабинет",
+            web_app=WebAppInfo(url=WEB_APP_URL)
+        )
+    )
+    builder.row(
+        types.InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_vac_menu")
     )
     return builder.as_markup()
 
@@ -327,6 +356,19 @@ async def get_vless_message(user_id: int):
     
     return message
 
+def get_vac_vpn_menu_message():
+    return """
+<b>VAC VPN - Главное меню</b>
+
+Выберите нужный раздел:
+
+🔐 <b>Личный кабинет</b> - информация о балансе и подписке
+🛠️ <b>Техподдержка</b> - помощь по любым вопросам  
+👥 <b>Рефералка</b> - приглашайте друзей и получайте бонусы
+🌐 <b>Веб-кабинет</b> - покупка подписки и управление аккаунтом
+🔧 <b>VLESS Конфиг</b> - настройки для подключения к VPN
+"""
+
 # Обработчики команд
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
@@ -386,40 +428,58 @@ async def cmd_vless(message: types.Message):
     vless_text = await get_vless_message(user_id)
     await message.answer(vless_text, reply_markup=get_vless_keyboard(), disable_web_page_preview=True)
 
-# Обработчики кнопок (используем F для фильтров)
-@dp.message(F.text == "🔐 Личный кабинет")
-async def cabinet_handler(message: types.Message):
-    await cmd_cabinet(message)
-
-@dp.message(F.text == "👥 Рефералка")
-async def referral_handler(message: types.Message):
-    await cmd_referral(message)
-
-@dp.message(F.text == "🛠️ Техподдержка")
-async def support_handler(message: types.Message):
-    await cmd_support(message)
-
-@dp.message(F.text == "🌐 Веб-кабинет")
-async def web_app_handler(message: types.Message):
-    user = message.from_user
-    builder = InlineKeyboardBuilder()
-    builder.row(
-        types.InlineKeyboardButton(
-            text="📲 Открыть веб-кабинет",
-            web_app=WebAppInfo(url=WEB_APP_URL)
-        )
-    )
+# Главная кнопка VAC VPN - открывает подменю
+@dp.message(F.text == "VAC VPN")
+async def vac_vpn_handler(message: types.Message):
     await message.answer(
-        f"🌐 <b>Веб-кабинет VAC VPN</b>\n\n"
-        f"Для покупки подписки и управления аккаунтом откройте веб-кабинет:",
-        reply_markup=builder.as_markup()
+        get_vac_vpn_menu_message(),
+        reply_markup=get_vac_vpn_menu_keyboard()
     )
 
-@dp.message(F.text == "🔧 VLESS Конфиг")
-async def vless_handler(message: types.Message):
-    await cmd_vless(message)
+# Обработчики callback-кнопок подменю VAC VPN
+@dp.callback_query(F.data == "personal_cabinet")
+async def personal_cabinet_handler(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    cabinet_text = await get_cabinet_message(user_id)
+    await callback.message.edit_text(cabinet_text, reply_markup=get_cabinet_keyboard())
+    await callback.answer()
 
-# Обработчики callback-кнопок
+@dp.callback_query(F.data == "support")
+async def support_handler(callback: types.CallbackQuery):
+    await callback.message.edit_text(get_support_message(), reply_markup=get_support_keyboard())
+    await callback.answer()
+
+@dp.callback_query(F.data == "referral")
+async def referral_handler(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    await callback.message.edit_text(get_ref_message(user_id), reply_markup=get_ref_keyboard(user_id))
+    await callback.answer()
+
+@dp.callback_query(F.data == "web_cabinet")
+async def web_cabinet_handler(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        "🌐 <b>Веб-кабинет VAC VPN</b>\n\n"
+        "Для покупки подписки и управления аккаунтом откройте веб-кабинет:",
+        reply_markup=get_web_cabinet_keyboard()
+    )
+    await callback.answer()
+
+@dp.callback_query(F.data == "vless_config")
+async def vless_config_handler(callback: types.CallbackQuery):
+    user_id = callback.from_user.id
+    vless_text = await get_vless_message(user_id)
+    await callback.message.edit_text(vless_text, reply_markup=get_vless_keyboard(), disable_web_page_preview=True)
+    await callback.answer()
+
+# Обработчики кнопок назад
+@dp.callback_query(F.data == "back_to_vac_menu")
+async def back_to_vac_menu_handler(callback: types.CallbackQuery):
+    await callback.message.edit_text(
+        get_vac_vpn_menu_message(),
+        reply_markup=get_vac_vpn_menu_keyboard()
+    )
+    await callback.answer()
+
 @dp.callback_query(F.data == "back_to_menu")
 async def back_to_menu_handler(callback: types.CallbackQuery):
     await callback.message.delete()
@@ -429,6 +489,7 @@ async def back_to_menu_handler(callback: types.CallbackQuery):
     )
     await callback.answer()
 
+# Обработчики обновления данных
 @dp.callback_query(F.data == "refresh_cabinet")
 async def refresh_cabinet_handler(callback: types.CallbackQuery):
     user_id = callback.from_user.id
