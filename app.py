@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse,RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
@@ -1820,6 +1820,35 @@ async def get_referral_stats(user_id: str):
     except Exception as e:
         logger.error(f"❌ Error getting referral stats: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/web-app")
+async def telegram_web_app(request: Request, tgWebAppData: str = None):
+    """
+    Обработчик для Telegram Web App с передачей параметров
+    """
+    try:
+        if tgWebAppData:
+            # Парсим данные из Telegram Web App
+            from urllib.parse import parse_qs
+            parsed_data = parse_qs(tgWebAppData)
+            
+            # Извлекаем user_id
+            user_id = None
+            if 'user' in parsed_data:
+                import json
+                user_data = json.loads(parsed_data['user'][0])
+                user_id = user_data.get('id')
+            
+            if user_id:
+                # Перенаправляем на главную страницу с user_id
+                return RedirectResponse(url=f"/?user_id={user_id}")
+        
+        # Если параметров нет, перенаправляем на страницу с инструкцией
+        return RedirectResponse(url="/?need_telegram=true")
+        
+    except Exception as e:
+        logger.error(f"Error processing Telegram Web App data: {e}")
+        return RedirectResponse(url="/")
 
 if __name__ == "__main__":
     import uvicorn
