@@ -549,7 +549,6 @@
     <a href="#" onclick="logout()">Выход</a>
   </div>
 
-  <!-- Остальной код остается без изменений -->
   <div class="card">
     <div class="balance-info">
       <div>💰 <strong>Баланс:</strong> <span id="userBalance">0</span>₽</div>
@@ -740,6 +739,9 @@
 
     console.log('👤 Telegram User Data:', { userId, userName, userUsername });
 
+    // Проверяем, открыто ли в превью режиме (без данных пользователя)
+    const isPreviewMode = !initData.user;
+
     // URL API
     const API_BASE_URL = "https://vacvpn-production.up.railway.app";
 
@@ -818,6 +820,37 @@
             </div>
         `;
         console.log('📝 Showing logo placeholder');
+    }
+
+    // Если это превью режим, показываем сообщение
+    if (isPreviewMode) {
+        document.body.innerHTML = `
+            <div style="padding: 20px; text-align: center; color: white; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg);">
+                <div style="background: var(--card); padding: 30px; border-radius: 20px; border: 2px solid var(--primary); max-width: 400px;">
+                    <h2 style="color: var(--primary); margin-bottom: 20px;">🔒 VAC VPN</h2>
+                    <p style="margin-bottom: 20px; line-height: 1.5;">
+                        Для доступа к веб-кабинету откройте это приложение через Telegram бота.
+                    </p>
+                    <div style="margin: 20px 0; padding: 15px; background: rgba(176, 203, 31, 0.1); border-radius: 10px;">
+                        <strong>Как открыть:</strong>
+                        <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                            <li>Откройте Telegram бота @vaaaac_bot</li>
+                            <li>Нажмите кнопку "🌐 Веб-кабинет"</li>
+                            <li>Или используйте меню бота</li>
+                        </ol>
+                    </div>
+                    <a href="https://t.me/vaaaac_bot" 
+                       style="display: inline-block; background: var(--primary); color: var(--bg); padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin: 10px 0;">
+                        📲 Открыть бота
+                    </a>
+                    <p style="margin-top: 20px; font-size: 12px; opacity: 0.8;">
+                        Текущий режим: Превью (только просмотр)
+                    </p>
+                </div>
+            </div>
+        `;
+        // Останавливаем выполнение остального кода
+        throw new Error('Preview mode - stopping execution');
     }
 
     // Инициализация интерфейса
@@ -1461,43 +1494,6 @@
         }
     }
 
-    // Инициализация пользователя
-    async function initUser() {
-        try {
-            console.log('🔄 Initializing user:', userId);
-            
-            if (!userId || userId === 'unknown') {
-                console.error('❌ User ID not available from Telegram');
-                showError('Ошибка: Telegram не предоставил данные пользователя. Откройте через бота.');
-                return;
-            }
-            
-            const response = await fetch(`${API_BASE_URL}/init-user`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    username: userUsername,
-                    first_name: userName,
-                    last_name: initData.user?.last_name || "",
-                    start_param: ""
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('⚠️ User init failed, trying to load data directly');
-            }
-
-            await loadUserData();
-                
-        } catch (error) {
-            console.error('❌ User init error:', error);
-            showError('Ошибка инициализации: ' + error.message);
-        }
-    }
-
     // Загрузка данных пользователя
     async function loadUserData() {
         try {
@@ -1516,18 +1512,15 @@
             const userData = await response.json();
             console.log('📊 User data loaded:', userData);
             
-            if (userData.error && !userData.is_preview) {
-                throw new Error(userData.error);
+            if (userData.error) {
+                console.warn('⚠️ User data error:', userData.error);
+                return;
             }
             
             updateUserInterface(userData);
             
         } catch (error) {
             console.error('❌ Ошибка загрузки данных:', error);
-            showError('Ошибка загрузки данных: ' + error.message);
-            
-            // Показываем базовый интерфейс даже при ошибке
-            showPreviewInterface();
         }
     }
 
@@ -1576,11 +1569,44 @@
         }
     }
 
-    function showPreviewInterface() {
-        document.getElementById('userBalance').textContent = '0';
-        document.getElementById('subscriptionInfo').style.display = 'none';
-        document.getElementById('subscriptionBadge').textContent = 'Неактивна';
-        document.getElementById('subscriptionBadge').className = 'badge inactive-badge';
+    // Инициализация пользователя
+    async function initUser() {
+        try {
+            console.log('🔄 Initializing user:', userId);
+            
+            if (!userId || userId === 'unknown') {
+                console.error('❌ User ID not available from Telegram');
+                return;
+            }
+            
+            // Показываем загрузку
+            document.getElementById('userName').textContent = 'Загрузка...';
+            document.getElementById('userBalance').textContent = '0';
+            
+            const response = await fetch(`${API_BASE_URL}/init-user`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    username: userUsername,
+                    first_name: userName,
+                    last_name: initData.user?.last_name || "",
+                    start_param: ""
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('⚠️ User init failed, trying to load data directly');
+            }
+
+            await loadUserData();
+                
+        } catch (error) {
+            console.error('❌ User init error:', error);
+            await loadUserData();
+        }
     }
 
     // Вспомогательные функции
