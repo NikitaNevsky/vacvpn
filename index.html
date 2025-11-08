@@ -754,6 +754,46 @@
     let userBalance = 0;
     let paymentUrl = '';
 
+        // Проверяем, открыто ли в превью режиме (без данных пользователя)
+    const isPreviewMode = !initData.user || !initData.user.id;
+
+    // Функция для показа превью интерфейса
+    function showPreviewInterface() {
+        document.getElementById('userName').textContent = 'Гость';
+        document.getElementById('userBalance').textContent = '0';
+        document.getElementById('subscriptionInfo').style.display = 'none';
+        document.getElementById('subscriptionBadge').textContent = 'Неактивна';
+        document.getElementById('subscriptionBadge').className = 'badge inactive-badge';
+        document.getElementById('vlessButton').style.display = 'none';
+        
+        // Показываем сообщение о необходимости открыть через бота
+        const tariffBlock = document.getElementById('tariffBlock');
+        if (tariffBlock) {
+            const previewMessage = document.createElement('div');
+            previewMessage.innerHTML = `
+                <div style="background: rgba(176, 203, 31, 0.1); border: 2px solid #B0CB1F; border-radius: 10px; padding: 20px; text-align: center; margin: 20px 0;">
+                    <h3 style="color: #B0CB1F; margin-bottom: 10px;">🔒 Требуется авторизация</h3>
+                    <p style="margin-bottom: 15px;">Для покупки подписки и доступа к функциям откройте приложение через Telegram бота:</p>
+                    <a href="https://t.me/vaaaac_bot" 
+                       style="display: inline-block; background: #B0CB1F; color: #121212; padding: 10px 20px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                        📲 Открыть VAC VPN бота
+                    </a>
+                    <p style="margin-top: 15px; font-size: 12px; opacity: 0.8;">
+                        Нажмите кнопку "🌐 Веб-кабинет" в меню бота
+                    </p>
+                </div>
+            `;
+            tariffBlock.parentNode.insertBefore(previewMessage, tariffBlock);
+        }
+        
+        // Отключаем функциональные кнопки
+        const functionalButtons = document.querySelectorAll('.button-yellow, .button-outline');
+        functionalButtons.forEach(btn => {
+            btn.style.opacity = '0.6';
+            btn.style.pointerEvents = 'none';
+        });
+    }
+
     // Тарифные планы
     const tariffPlans = {
       '1month': {
@@ -1495,11 +1535,20 @@
     }
 
     // Загрузка данных пользователя
+        // Загрузка данных пользователя
     async function loadUserData() {
         try {
             console.log('🔄 Loading user data for:', userId);
             
+            // Если это превью режим, не делаем запросы к API
+            if (isPreviewMode) {
+                console.log('👀 Skipping API call in preview mode');
+                showPreviewInterface();
+                return;
+            }
+            
             if (!userId || userId === 'unknown') {
+                showPreviewInterface();
                 return;
             }
             
@@ -1521,6 +1570,10 @@
             
         } catch (error) {
             console.error('❌ Ошибка загрузки данных:', error);
+            // В превью режиме не показываем ошибки
+            if (!isPreviewMode) {
+                showError('Ошибка загрузки данных: ' + error.message);
+            }
         }
     }
 
@@ -1570,12 +1623,21 @@
     }
 
     // Инициализация пользователя
+        // Инициализация пользователя
     async function initUser() {
         try {
             console.log('🔄 Initializing user:', userId);
             
+            // Если это превью режим, показываем соответствующий интерфейс
+            if (isPreviewMode) {
+                console.log('👀 Preview mode detected');
+                showPreviewInterface();
+                return;
+            }
+            
             if (!userId || userId === 'unknown') {
                 console.error('❌ User ID not available from Telegram');
+                showPreviewInterface();
                 return;
             }
             
@@ -1605,6 +1667,10 @@
                 
         } catch (error) {
             console.error('❌ User init error:', error);
+            // В превью режиме ожидаем ошибку, поэтому не показываем её
+            if (!isPreviewMode) {
+                showError('Ошибка загрузки данных: ' + error.message);
+            }
             await loadUserData();
         }
     }
