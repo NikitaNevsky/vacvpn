@@ -985,27 +985,29 @@ async def clear_referrals(user_id: str):
         return {"error": str(e)}
 
 @app.post("/init-user")
-@app.post("/init-user")
 async def init_user(request: InitUserRequest):
     try:
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
-        # Разрешаем создание пользователей с preview_ и unknown ID
-        if not request.user_id:
+        if not request.user_id or request.user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
         
-        # Логируем все попытки инициализации
-        logger.info(f"🔄 Init user attempt: {request.user_id}, username: {request.username}, first_name: {request.first_name}")
+        # Логируем входящие данные
+        logger.info(f"🔐 INIT USER: {request.user_id}, name: {request.first_name}, username: {request.username}")
+        logger.info(f"📱 Start param: {request.start_param}")
         
         referrer_id = None
         is_referral = False
         bonus_applied = False
         
+        # Обрабатываем реферальную систему из start_param
         if request.start_param:
+            logger.info(f"🎯 Processing start_param: {request.start_param}")
             referrer_id = extract_referrer_id(request.start_param)
             
             if referrer_id:
+                logger.info(f"👥 Referrer detected: {referrer_id}")
                 referrer = get_user(referrer_id)
                 
                 if referrer and referrer_id != request.user_id:
@@ -1017,6 +1019,7 @@ async def init_user(request: InitUserRequest):
                         bonus_result = add_referral_bonus_immediately(referrer_id, request.user_id)
                         if bonus_result:
                             bonus_applied = True
+                            logger.info(f"💰 Referral bonus applied: {referrer_id} -> {request.user_id}")
         
         user_ref = db.collection('users').document(request.user_id)
         user_doc = user_ref.get()
@@ -1036,7 +1039,8 @@ async def init_user(request: InitUserRequest):
                 'preferred_server': None,
                 'last_subscription_check': datetime.now().date().isoformat(),
                 'created_at': firestore.SERVER_TIMESTAMP,
-                'is_preview': request.user_id.startswith('preview_') or request.user_id.startswith('unknown')
+                'start_param': request.start_param,  # Сохраняем start_param для отладки
+                'referrer_id': referrer_id if is_referral else None
             }
             
             if is_referral and referrer_id:
@@ -1048,7 +1052,7 @@ async def init_user(request: InitUserRequest):
             
             user_ref.set(user_data)
             
-            logger.info(f"✅ New user created: {request.user_id} (preview: {user_data['is_preview']})")
+            logger.info(f"✅ NEW USER CREATED: {request.user_id} (referral: {is_referral})")
             
             return {
                 "success": True, 
@@ -1057,7 +1061,7 @@ async def init_user(request: InitUserRequest):
                 "is_referral": is_referral,
                 "bonus_applied": bonus_applied,
                 "referral_link": referral_link,
-                "is_preview": user_data['is_preview']
+                "referrer_id": referrer_id
             }
         else:
             user_data = user_doc.to_dict()
@@ -1070,7 +1074,7 @@ async def init_user(request: InitUserRequest):
             else:
                 referral_link = user_data.get('referral_link')
             
-            logger.info(f"✅ Existing user loaded: {request.user_id}")
+            logger.info(f"✅ EXISTING USER LOADED: {request.user_id}")
             
             return {
                 "success": True, 
@@ -1078,8 +1082,7 @@ async def init_user(request: InitUserRequest):
                 "user_id": request.user_id,
                 "is_referral": has_referrer,
                 "bonus_applied": False,
-                "referral_link": referral_link,
-                "is_preview": user_data.get('is_preview', False)
+                "referral_link": referral_link
             }
             
     except Exception as e:
