@@ -985,13 +985,18 @@ async def clear_referrals(user_id: str):
         return {"error": str(e)}
 
 @app.post("/init-user")
+@app.post("/init-user")
 async def init_user(request: InitUserRequest):
     try:
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
-        if not request.user_id or request.user_id == 'unknown':
+        # Разрешаем создание пользователей с preview_ и unknown ID
+        if not request.user_id:
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
+        
+        # Логируем все попытки инициализации
+        logger.info(f"🔄 Init user attempt: {request.user_id}, username: {request.username}, first_name: {request.first_name}")
         
         referrer_id = None
         is_referral = False
@@ -1030,7 +1035,8 @@ async def init_user(request: InitUserRequest):
                 'vless_uuid': None,
                 'preferred_server': None,
                 'last_subscription_check': datetime.now().date().isoformat(),
-                'created_at': firestore.SERVER_TIMESTAMP
+                'created_at': firestore.SERVER_TIMESTAMP,
+                'is_preview': request.user_id.startswith('preview_') or request.user_id.startswith('unknown')
             }
             
             if is_referral and referrer_id:
@@ -1042,13 +1048,16 @@ async def init_user(request: InitUserRequest):
             
             user_ref.set(user_data)
             
+            logger.info(f"✅ New user created: {request.user_id} (preview: {user_data['is_preview']})")
+            
             return {
                 "success": True, 
                 "message": "User created",
                 "user_id": request.user_id,
                 "is_referral": is_referral,
                 "bonus_applied": bonus_applied,
-                "referral_link": referral_link
+                "referral_link": referral_link,
+                "is_preview": user_data['is_preview']
             }
         else:
             user_data = user_doc.to_dict()
@@ -1061,19 +1070,21 @@ async def init_user(request: InitUserRequest):
             else:
                 referral_link = user_data.get('referral_link')
             
+            logger.info(f"✅ Existing user loaded: {request.user_id}")
+            
             return {
                 "success": True, 
                 "message": "User already exists", 
                 "user_id": request.user_id,
                 "is_referral": has_referrer,
                 "bonus_applied": False,
-                "referral_link": referral_link
+                "referral_link": referral_link,
+                "is_preview": user_data.get('is_preview', False)
             }
             
     except Exception as e:
         logger.error(f"❌ Error initializing user: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
-
 @app.get("/user-data")
 async def get_user_info(user_id: str):
     try:
