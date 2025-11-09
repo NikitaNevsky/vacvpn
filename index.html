@@ -549,6 +549,7 @@
     <a href="#" onclick="logout()">Выход</a>
   </div>
 
+  <!-- Остальной код остается без изменений -->
   <div class="card">
     <div class="balance-info">
       <div>💰 <strong>Баланс:</strong> <span id="userBalance">0</span>₽</div>
@@ -727,486 +728,29 @@
 
   <script>
     // Инициализация Telegram WebApp
-let tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+    let tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
 
-// Данные пользователя из Telegram (всегда доступны)
-const initData = tg.initDataUnsafe;
-const userId = initData.user?.id?.toString() || 'unknown';
-const userName = initData.user?.first_name || 'Пользователь';
-const userUsername = initData.user?.username || '';
+    // Данные пользователя
+    const initData = tg.initDataUnsafe;
+    const userId = initData.user?.id?.toString() || 'unknown';
+    const userName = initData.user?.first_name || 'Пользователь';
+    const userUsername = initData.user?.username || '';
 
-console.log('👤 Telegram User Data:', { userId, userName, userUsername });
+    console.log('👤 Telegram User Data:', { userId, userName, userUsername });
 
-// URL API
-const API_BASE_URL = "https://vacvpn-production.up.railway.app";
+    // URL API
+    const API_BASE_URL = "https://vacvpn-production.up.railway.app";
 
-// Переменные для хранения данных
-let currentPaymentId = null;
-let currentTariff = null;
-let currentPaymentMethod = 'yookassa';
-let hasSubscription = false;
-let subscriptionDays = 0;
-let userBalance = 0;
-let paymentUrl = '';
-
-// Тарифные планы
-const tariffPlans = {
-  '1month': {
-    id: '1month',
-    name: '1 Месяц',
-    price: 150,
-    days: 30,
-    description: 'Доступ к VPN на 30 дней. Реферал пополняет баланс'
-  },
-  '1year': {
-    id: '1year', 
-    name: '1 Год',
-    price: 1300,
-    days: 365,
-    description: 'Доступ к VPN на 365 дней. Реферал пополняет баланс'
-  }
-};
-
-// Функция для мгновенного обновления интерфейса с данными из Telegram
-function updateInterfaceInstantly() {
-    console.log('⚡ Instant interface update from Telegram data');
-    
-    // Обновляем имя пользователя
-    document.getElementById('userName').textContent = userName;
-    
-    // Показываем базовый интерфейс
-    document.getElementById('userBalance').textContent = '0';
-    document.getElementById('subscriptionInfo').style.display = 'none';
-    document.getElementById('subscriptionBadge').textContent = 'Неактивна';
-    document.getElementById('subscriptionBadge').className = 'badge inactive-badge';
-    document.getElementById('vlessButton').style.display = 'none';
-    
-    // Обновляем реферальную ссылку
-    document.getElementById('refLink').textContent = `https://t.me/vaaaac_bot?start=ref_${userId}`;
-    
-    // Включаем все кнопки
-    const functionalButtons = document.querySelectorAll('.button-yellow, .button-outline');
-    functionalButtons.forEach(btn => {
-        btn.style.opacity = '1';
-        btn.style.pointerEvents = 'auto';
-    });
-    
-    console.log('✅ Interface updated instantly');
-}
-
-// Функция для обновления интерфейса с данными из БД
-function updateInterfaceWithDBData(userData) {
-    console.log('📊 Updating interface with DB data:', userData);
-    
-    hasSubscription = userData.has_subscription || false;
-    subscriptionDays = userData.subscription_days || 0;
-    userBalance = userData.balance || 0;
-    
-    const subscriptionBadge = document.getElementById('subscriptionBadge');
-    const vlessConfigContainer = document.getElementById('vlessConfigContainer');
-    const vlessButton = document.getElementById('vlessButton');
-    const userBalanceElement = document.getElementById('userBalance');
-    
-    // Обновляем баланс
-    userBalanceElement.textContent = userBalance.toFixed(2);
-    
-    if (hasSubscription && subscriptionDays > 0) {
-        subscriptionBadge.textContent = 'Активна';
-        subscriptionBadge.className = 'badge active-badge';
-        vlessButton.style.display = 'block';
-        
-        if (userData.vless_uuid) {
-            document.getElementById('vlessUuidText').textContent = userData.vless_uuid;
-        }
-        
-        updateSubscriptionInfo();
-        
-    } else {
-        subscriptionBadge.textContent = 'Неактивна';
-        subscriptionBadge.className = 'badge inactive-badge';
-        vlessConfigContainer.style.display = 'none';
-        vlessButton.style.display = 'none';
-    }
-    
-    // Обновляем реферальную статистику
-    if (userData.referral_stats) {
-        document.getElementById('referralCount').textContent = userData.referral_stats.total_referrals;
-        document.getElementById('totalBonusMoney').textContent = userData.referral_stats.total_bonus_money;
-    }
-    
-    // Обновляем информацию о балансе для выбранного тарифа
-    if (currentTariff) {
-        updateBalanceInfo();
-    }
-    
-    console.log('✅ Interface updated with DB data');
-}
-
-// Основная функция инициализации
-async function initializeApp() {
-    console.log('🚀 Starting VAC VPN WebApp...');
-    
-    // 1. Сначала мгновенно обновляем интерфейс с данными из Telegram
-    updateInterfaceInstantly();
-    
-    // 2. Если это не превью режим, загружаем данные из БД в фоне
-    if (userId && userId !== 'unknown') {
-        console.log('🔄 Loading data from DB in background...');
-        loadUserDataFromDB();
-    } else {
-        console.log('👀 Preview mode - using Telegram data only');
-    }
-}
-
-// Функция загрузки данных из БД (в фоне)
-async function loadUserDataFromDB() {
-    try {
-        console.log('📡 Loading user data from DB for:', userId);
-        
-        // Сначала инициализируем пользователя
-        const initResponse = await fetch(`${API_BASE_URL}/init-user`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                user_id: userId,
-                username: userUsername,
-                first_name: userName,
-                last_name: initData.user?.last_name || "",
-                start_param: ""
-            })
-        });
-
-        if (!initResponse.ok) {
-            console.warn('⚠️ User init failed, trying to load data directly');
-        }
-
-        // Затем загружаем данные пользователя
-        const response = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const userData = await response.json();
-        console.log('📊 DB data loaded:', userData);
-        
-        if (userData.error) {
-            console.warn('⚠️ User data error:', userData.error);
-            return;
-        }
-        
-        // Обновляем интерфейс с данными из БД
-        updateInterfaceWithDBData(userData);
-        
-    } catch (error) {
-        console.error('❌ Error loading DB data:', error);
-        // Не показываем ошибку пользователю - у него уже работает интерфейс
-    }
-}
-
-// Остальные функции остаются без изменений, но обновите те, что работают с балансом:
-
-async function addBalance() {
-    try {
-        const amountInput = document.getElementById('balanceAmount');
-        const amount = parseFloat(amountInput.value);
-        
-        if (!amount || amount < 10 || amount > 50000) {
-            showError('Введите сумму от 10 до 50,000 рублей');
-            return;
-        }
-
-        showLoading();
-
-        console.log('💰 Adding balance:', { userId, amount });
-
-        const response = await fetch(`${API_BASE_URL}/add-balance`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                user_id: userId,
-                amount: amount,
-                payment_method: "yookassa"
-            })
-        });
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log('💰 Add balance result:', result);
-
-        if (result.success) {
-            if (result.payment_url) {
-                currentPaymentId = result.payment_id;
-                paymentUrl = result.payment_url;
-                
-                closeAddBalanceModal();
-                showSuccess('💳 Открываю страницу оплаты...');
-                
-                // Используем Telegram WebApp метод для открытия ссылки
-                if (window.Telegram && window.Telegram.WebApp) {
-                    window.Telegram.WebApp.openLink(paymentUrl);
-                } else {
-                    window.open(paymentUrl, '_blank');
-                }
-                
-                // Начинаем проверку статуса платежа
-                startBalancePaymentChecking();
-                
-            } else if (result.balance_added) {
-                closeAddBalanceModal();
-                showSuccess(`✅ Баланс пополнен на ${result.balance_added}₽!`);
-                // Перезагружаем данные из БД
-                await loadUserDataFromDB();
-            } else {
-                throw new Error('Не получена платежная ссылка');
-            }
-        } else {
-            throw new Error(result.error || 'Ошибка при создании платежа');
-        }
-
-    } catch (error) {
-        console.error('❌ Add balance error:', error);
-        showError('Ошибка пополнения баланса: ' + error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Функция покупки тарифа
-async function buyTariff() {
-    try {
-        if (!currentTariff) {
-            showError('Пожалуйста, выберите тариф');
-            return;
-        }
-
-        const tariff = tariffPlans[currentTariff];
-        showLoading();
-
-        console.log('🛒 Buying tariff:', {
-            tariff: currentTariff,
-            paymentMethod: currentPaymentMethod,
-            userId: userId,
-            price: tariff.price
-        });
-
-        let response;
-        
-        if (currentPaymentMethod === 'balance') {
-            response = await fetch(`${API_BASE_URL}/buy-with-balance`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    tariff_id: currentTariff,
-                    tariff_price: tariff.price,
-                    tariff_days: tariff.days
-                })
-            });
-        } else {
-            response = await fetch(`${API_BASE_URL}/activate-tariff`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    tariff: currentTariff,
-                    payment_method: "yookassa"
-                })
-            });
-        }
-
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log('💰 Payment result:', result);
-
-        if (result.success) {
-            if (currentPaymentMethod === 'balance') {
-                showSuccess('✅ Подписка успешно активирована с баланса!');
-                // Перезагружаем данные из БД
-                await loadUserDataFromDB();
-                
-            } else {
-                currentPaymentId = result.payment_id;
-                paymentUrl = result.payment_url;
-                
-                if (paymentUrl) {
-                    document.getElementById('paymentModal').style.display = 'flex';
-                    showSuccess('💳 Подготовлена страница оплаты');
-                } else {
-                    throw new Error('Платежная ссылка не получена');
-                }
-            }
-        } else {
-            throw new Error(result.error || 'Ошибка при создании платежа');
-        }
-
-    } catch (error) {
-        console.error('❌ Buy tariff error:', error);
-        showError('Ошибка при покупке: ' + error.message);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Вспомогательные функции
-function showLoading() {
-    document.getElementById('loadingIndicator').style.display = 'block';
-}
-
-function hideLoading() {
-    document.getElementById('loadingIndicator').style.display = 'none';
-}
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', function() {
-    loadLogoWithFallback();
-    initializeApp();
-    
-    // Закрываем меню при клике вне его
-    document.addEventListener('click', function(event) {
-        const menu = document.getElementById('menuDropdown');
-        const menuBtn = document.querySelector('.menu-btn');
-        if (menu.style.display === 'block' && !menu.contains(event.target) && !menuBtn.contains(event.target)) {
-            menu.style.display = 'none';
-        }
-    });
-});
-        
-        // Отключаем функциональные кнопки
-        const functionalButtons = document.querySelectorAll('.button-yellow, .button-outline');
-        functionalButtons.forEach(btn => {
-            if (!btn.classList.contains('preview-disabled')) {
-                btn.classList.add('preview-disabled');
-                btn.style.opacity = '0.6';
-                btn.style.pointerEvents = 'none';
-            }
-        });
-        
-        // Обновляем реферальную ссылку
-        document.getElementById('refLink').textContent = `https://t.me/vaaaac_bot?start=ref_${userId}`;
-    }
-
-    // Обновите функцию initUser
-    async function initUser() {
-        try {
-            console.log('🔄 Initializing user:', userId);
-            console.log('👀 Preview mode:', isPreviewMode);
-            
-            // Если это превью режим, показываем соответствующий интерфейс
-            if (isPreviewMode) {
-                console.log('👀 Preview mode detected - showing preview interface');
-                showPreviewInterface();
-                return;
-            }
-            
-            if (!userId || userId === 'unknown') {
-                console.error('❌ User ID not available from Telegram');
-                showPreviewInterface();
-                return;
-            }
-            
-            // Показываем загрузку
-            document.getElementById('userName').textContent = 'Загрузка...';
-            document.getElementById('userBalance').textContent = '0';
-            
-            console.log('📡 Making API request to init-user');
-            const response = await fetch(`${API_BASE_URL}/init-user`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    username: userUsername,
-                    first_name: userName,
-                    last_name: initData.user?.last_name || "",
-                    start_param: ""
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('⚠️ User init failed, trying to load data directly');
-            }
-
-            await loadUserData();
-                
-        } catch (error) {
-            console.error('❌ User init error:', error);
-            // В превью режиме ожидаем ошибку, поэтому не показываем её
-            if (!isPreviewMode) {
-                showError('Ошибка загрузки данных: ' + error.message);
-            }
-            // Все равно пытаемся загрузить данные
-            await loadUserData();
-        }
-    }
-
-    // Обновите функцию loadUserData
-    async function loadUserData() {
-        try {
-            console.log('🔄 Loading user data for:', userId);
-            
-            // Если это превью режим, не делаем запросы к API
-            if (isPreviewMode) {
-                console.log('👀 Skipping API call in preview mode');
-                showPreviewInterface();
-                return;
-            }
-            
-            if (!userId || userId === 'unknown') {
-                showPreviewInterface();
-                return;
-            }
-            
-            console.log('📡 Making API request to user-data');
-            const response = await fetch(`${API_BASE_URL}/user-data?user_id=${userId}`);
-            
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const userData = await response.json();
-            console.log('📊 User data loaded:', userData);
-            
-            if (userData.error) {
-                console.warn('⚠️ User data error:', userData.error);
-                return;
-            }
-            
-            updateUserInterface(userData);
-            
-        } catch (error) {
-            console.error('❌ Ошибка загрузки данных:', error);
-            // В превью режиме не показываем ошибки
-            if (!isPreviewMode) {
-                showError('Ошибка загрузки данных: ' + error.message);
-            }
-        }
-    }
-    
-        // Отключаем функциональные кнопки
-        const functionalButtons = document.querySelectorAll('.button-yellow, .button-outline');
-        functionalButtons.forEach(btn => {
-            btn.style.opacity = '0.6';
-            btn.style.pointerEvents = 'none';
-        });
-    }
+    // Переменные для хранения данных
+    let currentPaymentId = null;
+    let currentTariff = null;
+    let currentPaymentMethod = 'yookassa';
+    let hasSubscription = false;
+    let subscriptionDays = 0;
+    let userBalance = 0;
+    let paymentUrl = '';
 
     // Тарифные планы
     const tariffPlans = {
@@ -1274,37 +818,6 @@ document.addEventListener('DOMContentLoaded', function() {
             </div>
         `;
         console.log('📝 Showing logo placeholder');
-    }
-
-    // Если это превью режим, показываем сообщение
-    if (isPreviewMode) {
-        document.body.innerHTML = `
-            <div style="padding: 20px; text-align: center; color: white; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background: var(--bg);">
-                <div style="background: var(--card); padding: 30px; border-radius: 20px; border: 2px solid var(--primary); max-width: 400px;">
-                    <h2 style="color: var(--primary); margin-bottom: 20px;">🔒 VAC VPN</h2>
-                    <p style="margin-bottom: 20px; line-height: 1.5;">
-                        Для доступа к веб-кабинету откройте это приложение через Telegram бота.
-                    </p>
-                    <div style="margin: 20px 0; padding: 15px; background: rgba(176, 203, 31, 0.1); border-radius: 10px;">
-                        <strong>Как открыть:</strong>
-                        <ol style="text-align: left; margin: 10px 0; padding-left: 20px;">
-                            <li>Откройте Telegram бота @vaaaac_bot</li>
-                            <li>Нажмите кнопку "🌐 Веб-кабинет"</li>
-                            <li>Или используйте меню бота</li>
-                        </ol>
-                    </div>
-                    <a href="https://t.me/vaaaac_bot" 
-                       style="display: inline-block; background: var(--primary); color: var(--bg); padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; margin: 10px 0;">
-                        📲 Открыть бота
-                    </a>
-                    <p style="margin-top: 20px; font-size: 12px; opacity: 0.8;">
-                        Текущий режим: Превью (только просмотр)
-                    </p>
-                </div>
-            </div>
-        `;
-        // Останавливаем выполнение остального кода
-        throw new Error('Preview mode - stopping execution');
     }
 
     // Инициализация интерфейса
@@ -1948,21 +1461,49 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    // Инициализация пользователя
+    async function initUser() {
+        try {
+            console.log('🔄 Initializing user:', userId);
+            
+            if (!userId || userId === 'unknown') {
+                console.error('❌ User ID not available from Telegram');
+                showError('Ошибка: Telegram не предоставил данные пользователя. Откройте через бота.');
+                return;
+            }
+            
+            const response = await fetch(`${API_BASE_URL}/init-user`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    user_id: userId,
+                    username: userUsername,
+                    first_name: userName,
+                    last_name: initData.user?.last_name || "",
+                    start_param: ""
+                })
+            });
+
+            if (!response.ok) {
+                console.warn('⚠️ User init failed, trying to load data directly');
+            }
+
+            await loadUserData();
+                
+        } catch (error) {
+            console.error('❌ User init error:', error);
+            showError('Ошибка инициализации: ' + error.message);
+        }
+    }
+
     // Загрузка данных пользователя
-        // Загрузка данных пользователя
     async function loadUserData() {
         try {
             console.log('🔄 Loading user data for:', userId);
             
-            // Если это превью режим, не делаем запросы к API
-            if (isPreviewMode) {
-                console.log('👀 Skipping API call in preview mode');
-                showPreviewInterface();
-                return;
-            }
-            
             if (!userId || userId === 'unknown') {
-                showPreviewInterface();
                 return;
             }
             
@@ -1975,19 +1516,18 @@ document.addEventListener('DOMContentLoaded', function() {
             const userData = await response.json();
             console.log('📊 User data loaded:', userData);
             
-            if (userData.error) {
-                console.warn('⚠️ User data error:', userData.error);
-                return;
+            if (userData.error && !userData.is_preview) {
+                throw new Error(userData.error);
             }
             
             updateUserInterface(userData);
             
         } catch (error) {
             console.error('❌ Ошибка загрузки данных:', error);
-            // В превью режиме не показываем ошибки
-            if (!isPreviewMode) {
-                showError('Ошибка загрузки данных: ' + error.message);
-            }
+            showError('Ошибка загрузки данных: ' + error.message);
+            
+            // Показываем базовый интерфейс даже при ошибке
+            showPreviewInterface();
         }
     }
 
@@ -2036,57 +1576,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Инициализация пользователя
-        // Инициализация пользователя
-    async function initUser() {
-        try {
-            console.log('🔄 Initializing user:', userId);
-            
-            // Если это превью режим, показываем соответствующий интерфейс
-            if (isPreviewMode) {
-                console.log('👀 Preview mode detected');
-                showPreviewInterface();
-                return;
-            }
-            
-            if (!userId || userId === 'unknown') {
-                console.error('❌ User ID not available from Telegram');
-                showPreviewInterface();
-                return;
-            }
-            
-            // Показываем загрузку
-            document.getElementById('userName').textContent = 'Загрузка...';
-            document.getElementById('userBalance').textContent = '0';
-            
-            const response = await fetch(`${API_BASE_URL}/init-user`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    username: userUsername,
-                    first_name: userName,
-                    last_name: initData.user?.last_name || "",
-                    start_param: ""
-                })
-            });
-
-            if (!response.ok) {
-                console.warn('⚠️ User init failed, trying to load data directly');
-            }
-
-            await loadUserData();
-                
-        } catch (error) {
-            console.error('❌ User init error:', error);
-            // В превью режиме ожидаем ошибку, поэтому не показываем её
-            if (!isPreviewMode) {
-                showError('Ошибка загрузки данных: ' + error.message);
-            }
-            await loadUserData();
-        }
+    function showPreviewInterface() {
+        document.getElementById('userBalance').textContent = '0';
+        document.getElementById('subscriptionInfo').style.display = 'none';
+        document.getElementById('subscriptionBadge').textContent = 'Неактивна';
+        document.getElementById('subscriptionBadge').className = 'badge inactive-badge';
     }
 
     // Вспомогательные функции
