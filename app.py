@@ -81,17 +81,6 @@ VLESS_SERVERS = [
         "short_id": "abcd1234",
         "flow": "xtls-rprx-vision",
         "security": "reality"
-    },
-    {
-        "id": "Netherlands", 
-        "name": "Netherlands",
-        "address": "103.75.126.91", 
-        "port": 2053,
-        "sni": "www.google.com",
-        "reality_pbk": "biUkzZNhzbhq_b8jcw2_xbpyAQPojjG_icyZ_syWdm8",
-        "short_id": "abcd1234",
-        "flow": "xtls-rprx-vision",
-        "security": "reality"
     }
 ]
 
