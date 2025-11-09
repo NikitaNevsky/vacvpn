@@ -1516,46 +1516,58 @@
     }
 
         // Инициализация пользователя
-    async function initUser() {
-        try {
-            console.log('🔄 Initializing user:', userId);
-            
-            if (!userId || userId === 'unknown') {
-                console.error('❌ User ID not available from Telegram');
-                showError('❌ Ошибка: Не удалось получить данные из Telegram. Пожалуйста, закройте и откройте приложение через бота @vaaaac_bot');
-                return;
-            }
-            
-            // Инициализируем пользователя на сервере
-            const response = await fetch(`${API_BASE_URL}/init-user`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    user_id: userId,
-                    username: userUsername,
-                    first_name: userName,
-                    last_name: initData.user?.last_name || "",
-                    start_param: tg.initData || ""
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            const result = await response.json();
-            console.log('✅ User init result:', result);
-
-            // Загружаем данные пользователя
-            await loadUserData();
-                
-        } catch (error) {
-            console.error('❌ User init error:', error);
-            showError('Ошибка инициализации: ' + error.message);
+    // Инициализация пользователя
+async function initUser() {
+    try {
+        console.log('🔄 Initializing user:', userId);
+        
+        if (!userId || userId === 'unknown') {
+            console.error('❌ User ID not available from Telegram');
+            showError('❌ Ошибка: Не удалось получить данные из Telegram. Пожалуйста, закройте и откройте приложение через бота @vaaaac_bot');
+            return;
         }
+        
+        // Сначала исправляем возможные проблемы с рефералами
+        try {
+            const fixResponse = await fetch(`${API_BASE_URL}/fix-self-referrals/${userId}`);
+            if (fixResponse.ok) {
+                const fixResult = await fixResponse.json();
+                console.log('🔧 Fixed self-referrals:', fixResult);
+            }
+        } catch (fixError) {
+            console.warn('⚠️ Could not fix self-referrals:', fixError);
+        }
+        
+        // Инициализируем пользователя на сервере
+        const response = await fetch(`${API_BASE_URL}/init-user`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user_id: userId,
+                username: userUsername,
+                first_name: userName,
+                last_name: initData.user?.last_name || "",
+                start_param: tg.initData || ""
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('✅ User init result:', result);
+
+        // Загружаем данные пользователя
+        await loadUserData();
+            
+    } catch (error) {
+        console.error('❌ User init error:', error);
+        showError('Ошибка инициализации: ' + error.message);
     }
+}
     // Функция для отладки WebApp данных
     function debugTelegramWebApp() {
         console.log('=== TELEGRAM WEBAPP FULL DEBUG ===');
