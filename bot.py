@@ -311,10 +311,10 @@ async def get_vless_message(user_id: int):
 3. Импортируйте конфигурацию
 
 💡 <b>Рекомендуемые приложения:</b>
-• Android: V2RayNG
-• iOS: Shadowrocket
-• Windows: V2RayN
-• macOS: V2RayU
+• Android: V2BOX
+• iOS: V2BOX
+• Windows: Hiddify
+• macOS: V2BOX
 """
     
     return message
