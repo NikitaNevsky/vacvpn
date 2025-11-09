@@ -985,6 +985,7 @@ async def clear_referrals(user_id: str):
         return {"error": str(e)}
 
 @app.post("/init-user")
+@app.post("/init-user")
 async def init_user(request: InitUserRequest):
     try:
         if not db:
@@ -1008,18 +1009,25 @@ async def init_user(request: InitUserRequest):
             
             if referrer_id:
                 logger.info(f"👥 Referrer detected: {referrer_id}")
-                referrer = get_user(referrer_id)
                 
-                if referrer and referrer_id != request.user_id:
-                    referral_id = f"{referrer_id}_{request.user_id}"
-                    referral_exists = db.collection('referrals').document(referral_id).get().exists
+                # ВАЖНО: проверяем что referrer_id не совпадает с user_id
+                if referrer_id != request.user_id:
+                    referrer = get_user(referrer_id)
                     
-                    if not referral_exists:
-                        is_referral = True
-                        bonus_result = add_referral_bonus_immediately(referrer_id, request.user_id)
-                        if bonus_result:
-                            bonus_applied = True
-                            logger.info(f"💰 Referral bonus applied: {referrer_id} -> {request.user_id}")
+                    if referrer:
+                        referral_id = f"{referrer_id}_{request.user_id}"
+                        referral_exists = db.collection('referrals').document(referral_id).get().exists
+                        
+                        if not referral_exists:
+                            is_referral = True
+                            bonus_result = add_referral_bonus_immediately(referrer_id, request.user_id)
+                            if bonus_result:
+                                bonus_applied = True
+                                logger.info(f"💰 Referral bonus applied: {referrer_id} -> {request.user_id}")
+                    else:
+                        logger.warning(f"⚠️ Referrer {referrer_id} not found in database")
+                else:
+                    logger.warning(f"⚠️ Self-referral detected: user {request.user_id} referred themselves")
         
         user_ref = db.collection('users').document(request.user_id)
         user_doc = user_ref.get()
@@ -1039,20 +1047,20 @@ async def init_user(request: InitUserRequest):
                 'preferred_server': None,
                 'last_subscription_check': datetime.now().date().isoformat(),
                 'created_at': firestore.SERVER_TIMESTAMP,
-                'start_param': request.start_param,  # Сохраняем start_param для отладки
+                'start_param': request.start_param,  # Сохраняем для отладки
                 'referrer_id': referrer_id if is_referral else None
             }
             
             if is_referral and referrer_id:
                 user_data['referred_by'] = referrer_id
             
-            # Генерируем и сохраняем реферальную ссылку
+            # Генерируем реферальную ссылку
             referral_link = generate_referral_link(request.user_id)
             user_data['referral_link'] = referral_link
             
             user_ref.set(user_data)
             
-            logger.info(f"✅ NEW USER CREATED: {request.user_id} (referral: {is_referral})")
+            logger.info(f"✅ NEW USER CREATED: {request.user_id} (referral: {is_referral}, bonus: {bonus_applied})")
             
             return {
                 "success": True, 
@@ -1067,14 +1075,14 @@ async def init_user(request: InitUserRequest):
             user_data = user_doc.to_dict()
             has_referrer = user_data.get('referred_by') is not None
             
-            # Если у пользователя еще нет реферальной ссылки, генерируем и сохраняем её
+            # Обновляем реферальную ссылку если её нет
             if not user_data.get('referral_link'):
                 referral_link = generate_referral_link(request.user_id)
                 save_referral_link(request.user_id, referral_link)
             else:
                 referral_link = user_data.get('referral_link')
             
-            logger.info(f"✅ EXISTING USER LOADED: {request.user_id}")
+            logger.info(f"✅ EXISTING USER LOADED: {request.user_id} (has_referrer: {has_referrer})")
             
             return {
                 "success": True, 
