@@ -319,14 +319,10 @@
       font-weight: 600;
       cursor: pointer;
       flex-shrink: 0;
-      transition: all 0.3s;
+      transition: opacity 0.2s;
     }
     .copy-btn:active {
       opacity: 0.8;
-    }
-    .copy-btn.copied {
-      background: #4CAF50;
-      color: white;
     }
     .button-help {
       font-size: 16px;
@@ -461,7 +457,7 @@
       font-weight: 600;
     }
     .balance-sufficient {
-      color: var(--primary;
+      color: var(--primary);
     }
     .balance-insufficient {
       color: #ff4444;
@@ -1298,19 +1294,7 @@
     async function copyToClipboard(text) {
       try {
         await navigator.clipboard.writeText(text);
-        
-        // Показываем уведомление в интерфейсе
         showSuccess('Скопировано в буфер обмена!');
-        
-        // Дополнительно можно показать всплывающее уведомление в Telegram WebApp
-        if (window.Telegram && window.Telegram.WebApp) {
-          window.Telegram.WebApp.showPopup({
-            title: 'Успех',
-            message: 'Ссылка скопирована в буфер обмена',
-            buttons: [{ type: 'ok' }]
-          });
-        }
-        
         return true;
       } catch (err) {
         console.error('Ошибка копирования: ', err);
@@ -1335,27 +1319,9 @@
 
     function copyRef() {
       const refLinkElement = document.getElementById('refLink');
-      const copyBtn = event.target;
-      
       if (refLinkElement) {
         const refLink = refLinkElement.textContent;
-        
-        // Меняем вид кнопки сразу
-        copyBtn.innerHTML = '✓ Скопировано!';
-        copyBtn.style.background = '#4CAF50';
-        copyBtn.style.color = 'white';
-        copyBtn.disabled = true;
-        
-        // Копируем в буфер обмена
         copyToClipboard(refLink);
-        
-        // Возвращаем исходный вид через 2 секунды
-        setTimeout(() => {
-          copyBtn.innerHTML = 'Скопировать';
-          copyBtn.style.background = 'var(--primary)';
-          copyBtn.style.color = 'var(--bg)';
-          copyBtn.disabled = false;
-        }, 2000);
       }
     }
 
