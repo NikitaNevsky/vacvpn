@@ -566,6 +566,18 @@
       background: rgba(244, 67, 54, 0.2);
       color: #F44336;
     }
+
+    /* Стиль для уведомления о копировании реферальной ссылки */
+    .ref-copy-notification {
+      background: rgba(76, 175, 80, 0.2);
+      color: #4CAF50;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      text-align: center;
+      margin-top: 8px;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -741,6 +753,10 @@
       <div class="ref-link-box">
         <span class="ref-link-text" id="refLink">Загрузка ссылки...</span>
         <button class="copy-btn" onclick="copyRef()">Скопировать</button>
+      </div>
+      <!-- Уведомление о копировании реферальной ссылки -->
+      <div class="ref-copy-notification" id="refCopyNotification">
+        ✅ Ссылка скопирована!
       </div>
       <div id="referralStats" style="margin-top: 12px; padding: 10px; background: rgba(176, 203, 31, 0.1); border-radius: 6px; font-size: 13px;">
         <strong>Ваша реферальная статистика:</strong><br>
@@ -1316,10 +1332,20 @@
 
     function copyRef() {
       const refLinkElement = document.getElementById('refLink');
+      const notification = document.getElementById('refCopyNotification');
+      
       if (refLinkElement) {
         const refLink = refLinkElement.textContent;
         copyToClipboard(refLink);
-        showSuccess('✅ Ссылка скопирована!');
+        
+        // Показываем уведомление под реферальной ссылкой
+        if (notification) {
+          notification.style.display = 'block';
+          // Скрываем уведомление через 3 секунды
+          setTimeout(() => {
+            notification.style.display = 'none';
+          }, 3000);
+        }
       }
     }
 
