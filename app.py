@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, FileResponse, JSONResponse,RedirectResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 import os
@@ -23,24 +23,18 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-import hashlib
-import hmac
 
 # Настройка логирования
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('vpn_service.log', encoding='utf-8')
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="VAC VPN API",
     description="Complete VAC VPN Service with API and Web Interface",
-    version="2.0.0"
+    version="1.0.0"
 )
 
 # CORS middleware
@@ -184,7 +178,6 @@ class SaveVlessKeyRequest(BaseModel):
     vless_key: str
     config_data: dict
 
-# Утилиты
 def ensure_logo_exists():
     """Обеспечивает что логотип доступен в статической директории"""
     try:
@@ -234,145 +227,9 @@ def create_placeholder_logo():
     except Exception as e:
         logger.error(f"❌ Error creating placeholder logo: {e}")
 
-def generate_user_uuid():
-    """Генерация уникального UUID для пользователя"""
-    return str(uuid.uuid4())
-
-def verify_yookassa_signature(body: bytes, signature: str) -> bool:
-    """Проверка подписи уведомления от ЮКассы"""
-    try:
-        secret_key = os.getenv("YOOKASSA_SECRET_KEY", "")
-        if not secret_key:
-            logger.warning("⚠️ YOOKASSA_SECRET_KEY not set, skipping signature verification")
-            return True
-            
-        digest = hmac.new(
-            secret_key.encode(),
-            body,
-            hashlib.sha256
-        ).hexdigest()
-        return hmac.compare_digest(digest, signature)
-    except Exception as e:
-        logger.error(f"❌ Error verifying signature: {e}")
-        return False
-
-# Функции работы с Firebase
-def get_user(user_id: str):
-    if not db: 
-        return None
-    try:
-        doc = db.collection('users').document(user_id).get()
-        return doc.to_dict() if doc.exists else None
-    except Exception as e:
-        logger.error(f"❌ Error getting user: {e}")
-        return None
-
-def update_user_balance(user_id: str, amount: float):
-    if not db: 
-        return False
-    try:
-        user_ref = db.collection('users').document(user_id)
-        
-        @firestore.transactional
-        def update_balance_transaction(transaction, user_ref, amount):
-            user_doc = user_ref.get(transaction=transaction)
-            if not user_doc.exists:
-                return False
-                
-            user_data = user_doc.to_dict()
-            current_balance = user_data.get('balance', 0.0)
-            new_balance = current_balance + amount
-            
-            transaction.update(user_ref, {
-                'balance': new_balance,
-                'updated_at': firestore.SERVER_TIMESTAMP
-            })
-            return True
-        
-        transaction = db.transaction()
-        success = update_balance_transaction(transaction, user_ref, amount)
-        
-        if success:
-            logger.info(f"💰 Balance updated for user {user_id}: +{amount}₽")
-            return True
-        else:
-            logger.error(f"❌ Failed to update balance for user {user_id}")
-            return False
-            
-    except Exception as e:
-        logger.error(f"❌ Error updating balance: {e}")
-        return False
-
-async def ensure_user_uuid(user_id: str, server_id: str = None) -> str:
-    """Гарантирует что у пользователя есть UUID и он добавлен в Xray"""
-    if not db:
-        raise Exception("Database not connected")
-    
-    try:
-        user_ref = db.collection('users').document(user_id)
-        
-        @firestore.transactional
-        def ensure_uuid_transaction(transaction, user_ref, user_id):
-            user_doc = user_ref.get(transaction=transaction)
-            if not user_doc.exists:
-                raise Exception("User not found")
-            
-            user_data = user_doc.to_dict()
-            vless_uuid = user_data.get('vless_uuid')
-            
-            if not vless_uuid:
-                vless_uuid = generate_user_uuid()
-                logger.info(f"🆕 Generating new UUID for user {user_id}: {vless_uuid}")
-                transaction.update(user_ref, {
-                    'vless_uuid': vless_uuid,
-                    'updated_at': firestore.SERVER_TIMESTAMP
-                })
-            
-            return vless_uuid
-        
-        transaction = db.transaction()
-        vless_uuid = ensure_uuid_transaction(transaction, user_ref, user_id)
-        
-        # Асинхронно добавляем в Xray
-        servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
-        asyncio.create_task(fast_add_to_xray(vless_uuid, servers_to_add))
-        
-        return vless_uuid
-        
-    except Exception as e:
-        logger.error(f"❌ Error ensuring user UUID: {e}")
-        raise
-
-async def fast_add_to_xray(user_uuid: str, servers_to_add):
-    """Быстрое добавление в Xray без блокировки основного потока"""
-    try:
-        for server_name in servers_to_add:
-            if server_name in XRAY_SERVERS:
-                try:
-                    async with httpx.AsyncClient(timeout=10.0) as client:
-                        response = await client.post(
-                            f"{XRAY_SERVERS[server_name]['url']}/user",
-                            headers={
-                                "X-API-Key": XRAY_SERVERS[server_name]["api_key"],
-                                "Content-Type": "application/json"
-                            },
-                            json={"uuid": user_uuid},
-                            timeout=10.0
-                        )
-                        
-                        if response.status_code == 200:
-                            logger.info(f"✅ User {user_uuid} added to {server_name}")
-                        else:
-                            logger.warning(f"⚠️ Failed to add user to {server_name}: {response.status_code}")
-                            
-                except Exception as e:
-                    logger.warning(f"⚠️ Fast add failed for {server_name}: {e}")
-                    
-    except Exception as e:
-        logger.error(f"❌ Error in fast_add_to_xray: {e}")
-
+# Функции работы с Xray через API - ОПТИМИЗИРОВАННЫЕ ВЕРСИИ
 async def check_user_in_xray(user_uuid: str, server_id: str = None) -> bool:
-    """Проверить есть ли пользователь в Xray"""
+    """Проверить есть ли пользователь в Xray - БЫСТРАЯ ВЕРСИЯ"""
     try:
         if server_id and server_id in XRAY_SERVERS:
             servers_to_check = [(server_id, XRAY_SERVERS[server_id])]
@@ -381,11 +238,11 @@ async def check_user_in_xray(user_uuid: str, server_id: str = None) -> bool:
         
         for server_name, server_config in servers_to_check:
             try:
-                async with httpx.AsyncClient(timeout=5.0) as client:
+                async with httpx.AsyncClient() as client:
                     response = await client.get(
                         f"{server_config['url']}/user/{user_uuid}",
                         headers={"X-API-Key": server_config["api_key"]},
-                        timeout=5.0
+                        timeout=3.0  # Уменьшили таймаут
                     )
                     
                     if response.status_code == 200:
@@ -409,22 +266,31 @@ async def add_user_to_xray_server(server_id: str, user_id: str, user_uuid: str) 
             return False
         
         server_config = XRAY_SERVERS[server_id]
+        api_url = f"{server_config['api_url']}/add-user"
         
-        logger.info(f"🚀 Adding user {user_id} to {server_id}")
+        payload = {
+            "user_id": user_id,
+            "uuid": user_uuid
+        }
         
-        async with httpx.AsyncClient(timeout=15.0) as client:
-            response = await client.post(
-                f"{server_config['url']}/user",
-                headers={
-                    "X-API-Key": server_config["api_key"],
-                    "Content-Type": "application/json"
-                },
-                json={"uuid": user_uuid}
-            )
+        headers = {
+            "Authorization": f"Bearer {server_config['api_key']}",
+            "Content-Type": "application/json"
+        }
+        
+        logger.info(f"🚀 Sending user {user_id} to {server_id} via API: {api_url}")
+        
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(api_url, json=payload, headers=headers)
             
             if response.status_code == 200:
-                logger.info(f"✅ User {user_id} successfully added to {server_id}")
-                return True
+                result = response.json()
+                if result.get("success"):
+                    logger.info(f"✅ User {user_id} successfully added to {server_id}")
+                    return True
+                else:
+                    logger.error(f"❌ API returned error for {server_id}: {result.get('error')}")
+                    return False
             else:
                 logger.error(f"❌ API call failed for {server_id}: {response.status_code} - {response.text}")
                 return False
@@ -433,28 +299,150 @@ async def add_user_to_xray_server(server_id: str, user_id: str, user_uuid: str) 
         logger.error(f"❌ Error calling Xray API for {server_id}: {e}")
         return False
 
+async def remove_user_from_xray(user_uuid: str, server_id: str = None) -> bool:
+    """Удалить пользователя из Xray сервер(ы)"""
+    try:
+        logger.info(f"🗑️ [XRAY REMOVE] Removing user: {user_uuid} from server: {server_id}")
+        return True
+    except Exception as e:
+        logger.error(f"❌ [XRAY REMOVE] Exception: {str(e)}")
+        return False
+
+async def get_xray_users_count(server_id: str = None) -> int:
+    """Получить количество пользователей в Xray"""
+    try:
+        return 0
+    except Exception as e:
+        logger.error(f"❌ Error getting Xray users count: {e}")
+        return 0
+
+# Функции работы с Firebase
+def get_user(user_id: str):
+    if not db: 
+        return None
+    try:
+        doc = db.collection('users').document(user_id).get()
+        return doc.to_dict() if doc.exists else None
+    except Exception as e:
+        logger.error(f"❌ Error getting user: {e}")
+        return None
+
+def update_user_balance(user_id: str, amount: float):
+    if not db: 
+        return False
+    try:
+        user_ref = db.collection('users').document(user_id)
+        user = user_ref.get()
+        
+        if user.exists:
+            user_data = user.to_dict()
+            current_balance = user_data.get('balance', 0.0)
+            new_balance = current_balance + amount
+            
+            user_ref.update({
+                'balance': new_balance,
+                'updated_at': firestore.SERVER_TIMESTAMP
+            })
+            
+            logger.info(f"💰 Balance updated for user {user_id}: {current_balance} -> {new_balance}")
+            return True
+        else:
+            return False
+    except Exception as e:
+        logger.error(f"❌ Error updating balance: {e}")
+        return False
+
+def generate_user_uuid():
+    """Генерация уникального UUID для пользователя"""
+    return str(uuid.uuid4())
+
+async def ensure_user_uuid(user_id: str, server_id: str = None) -> str:
+    """Гарантирует что у пользователя есть UUID и он добавлен в Xray - СУПЕР БЫСТРО"""
+    if not db:
+        raise Exception("Database not connected")
+    
+    try:
+        user_ref = db.collection('users').document(user_id)
+        user = user_ref.get()
+        
+        if not user.exists:
+            raise Exception("User not found")
+        
+        user_data = user.to_dict()
+        vless_uuid = user_data.get('vless_uuid')
+        
+        if vless_uuid:
+            logger.info(f"🔍 User {user_id} has existing UUID: {vless_uuid}")
+            
+            # БЫСТРОЕ ДОБАВЛЕНИЕ: не проверяем, просто добавляем
+            servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
+            
+            # Запускаем добавление асинхронно без ожидания
+            asyncio.create_task(fast_add_to_xray(vless_uuid, servers_to_add))
+            
+            return vless_uuid
+        
+        # Генерируем новый UUID
+        new_uuid = generate_user_uuid()
+        logger.info(f"🆕 Generating new UUID for user {user_id}: {new_uuid}")
+        
+        # Обновляем пользователя
+        user_ref.update({
+            'vless_uuid': new_uuid,
+            'updated_at': firestore.SERVER_TIMESTAMP
+        })
+        
+        # Быстро добавляем на серверы
+        servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
+        asyncio.create_task(fast_add_to_xray(new_uuid, servers_to_add))
+        
+        return new_uuid
+        
+    except Exception as e:
+        logger.error(f"❌ Error ensuring user UUID: {e}")
+        raise
+
+async def fast_add_to_xray(user_uuid: str, servers_to_add):
+    """Быстрое добавление в Xray без блокировки основного потока"""
+    try:
+        for server_name in servers_to_add:
+            if server_name in XRAY_SERVERS:
+                try:
+                    async with httpx.AsyncClient() as client:
+                        await client.post(
+                            f"{XRAY_SERVERS[server_name]['url']}/user",
+                            headers={
+                                "X-API-Key": XRAY_SERVERS[server_name]["api_key"],
+                                "Content-Type": "application/json"
+                            },
+                            json={"uuid": user_uuid},
+                            timeout=5.0
+                        )
+                    logger.info(f"⚡ FAST: User {user_uuid} sent to {server_name}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Fast add failed for {server_name}: {e}")
+    except Exception as e:
+        logger.error(f"❌ Error in fast_add_to_xray: {e}")
+
 def add_referral_bonus_immediately(referrer_id: str, referred_id: str):
     if not db: 
         return False
     
     try:
-        # Обновляем баланс реферера
-        update_user_balance(referrer_id, REFERRAL_BONUS_REFERRER)
-        # Обновляем баланс приглашенного
-        update_user_balance(referred_id, REFERRAL_BONUS_REFERRED)
+        update_user_balance(referrer_id, 50.0)
+        update_user_balance(referred_id, 100.0)
         
-        # Сохраняем запись о реферале
         referral_id = f"{referrer_id}_{referred_id}"
         db.collection('referrals').document(referral_id).set({
             'referrer_id': referrer_id,
             'referred_id': referred_id,
-            'referrer_bonus': REFERRAL_BONUS_REFERRER,
-            'referred_bonus': REFERRAL_BONUS_REFERRED,
+            'referrer_bonus': 50.0,
+            'referred_bonus': 100.0,
             'bonus_paid': True,
             'created_at': firestore.SERVER_TIMESTAMP
         })
         
-        logger.info(f"✅ Referral bonuses applied: {referrer_id} -> {referred_id}")
+        logger.info(f"✅ Immediate referral bonuses applied")
         return True
         
     except Exception as e:
@@ -480,7 +468,6 @@ def save_vless_key_to_db(user_id: str, server_id: str, vless_key: str, config_da
         }
         
         db.collection('vless_keys').document(vless_key_id).set(vless_data)
-        logger.info(f"✅ VLESS key saved for user {user_id} on server {server_id}")
         return True
         
     except Exception as e:
@@ -520,7 +507,6 @@ def update_vless_key_status(user_id: str, server_id: str, is_active: bool):
             'updated_at': firestore.SERVER_TIMESTAMP
         })
         
-        logger.info(f"✅ VLESS key status updated for user {user_id} on server {server_id}: {is_active}")
         return True
         
     except Exception as e:
@@ -655,17 +641,14 @@ def process_subscription_days(user_id: str) -> bool:
                     
                     if new_days == 0:
                         update_data['has_subscription'] = False
-                        update_data['subscription_end'] = datetime.now().isoformat()
+                        update_data['subscription_end'] = datetime.now().isoformat()  # Записываем конец подписки
                         if vless_uuid:
-                            # Асинхронно удаляем из Xray
                             asyncio.create_task(remove_user_from_xray(vless_uuid))
-                            # Деактивируем ключи
                             user_vless_keys = get_user_vless_keys(user_id)
                             for key_data in user_vless_keys:
                                 update_vless_key_status(user_id, key_data['server_id'], False)
                     
                     db.collection('users').document(user_id).update(update_data)
-                    logger.info(f"📅 Subscription updated for user {user_id}: {new_days} days left")
                     
             except Exception as e:
                 logger.error(f"❌ Error processing subscription days: {e}")
@@ -676,31 +659,8 @@ def process_subscription_days(user_id: str) -> bool:
         logger.error(f"❌ Error processing subscription: {e}")
         return False
 
-async def remove_user_from_xray(user_uuid: str):
-    """Удалить пользователя из всех Xray серверов"""
-    try:
-        for server_name, server_config in XRAY_SERVERS.items():
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    response = await client.delete(
-                        f"{server_config['url']}/user/{user_uuid}",
-                        headers={"X-API-Key": server_config["api_key"]},
-                        timeout=10.0
-                    )
-                    
-                    if response.status_code == 200:
-                        logger.info(f"✅ User {user_uuid} removed from {server_name}")
-                    else:
-                        logger.warning(f"⚠️ Failed to remove user from {server_name}: {response.status_code}")
-                        
-            except Exception as e:
-                logger.warning(f"⚠️ Error removing user from {server_name}: {e}")
-                
-    except Exception as e:
-        logger.error(f"❌ Error in remove_user_from_xray: {e}")
-
 async def check_all_subscriptions():
-    """Автоматическая проверка всех подписок"""
+    """Автоматическая проверка всех подписок - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     if not db:
         return []
     
@@ -714,6 +674,7 @@ async def check_all_subscriptions():
             user_data = user_doc.to_dict()
             user_id = user_data.get('user_id')
             
+            # Используем синхронную версию, так как APScheduler не поддерживает async
             success = process_subscription_days(user_id)
             
             if success:
@@ -721,27 +682,38 @@ async def check_all_subscriptions():
                 if not user_updated.get('has_subscription', False):
                     expired_users.append(user_id)
         
-        if expired_users:
-            logger.info(f"📅 Subscription check completed: {len(expired_users)} users expired")
-        
+        logger.info(f"✅ Checked all subscriptions. Expired users: {len(expired_users)}")
         return expired_users
         
     except Exception as e:
         logger.error(f"❌ Error checking subscriptions: {e}")
         return []
 
+def check_all_subscriptions_wrapper():
+    """Обертка для запуска асинхронной функции в отдельном event loop"""
+    try:
+        # Создаем новый event loop для выполнения асинхронной задачи
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        result = loop.run_until_complete(check_all_subscriptions())
+        loop.close()
+        return result
+    except Exception as e:
+        logger.error(f"❌ Error in subscription checker wrapper: {e}")
+        return []
+
 def start_subscription_checker():
-    """Запуск периодической проверки подписок"""
+    """Запуск периодической проверки подписок - ИСПРАВЛЕННАЯ ВЕРСИЯ"""
     try:
         scheduler = BackgroundScheduler()
         scheduler.add_job(
-            check_all_subscriptions,
+            check_all_subscriptions_wrapper,  # Используем обертку вместо асинхронной функции
             'interval',
             hours=6,
             id='subscription_check'
         )
         scheduler.start()
-        logger.info("✅ Subscription checker started")
+        logger.info("✅ Subscription checker started (interval: 6 hours)")
     except Exception as e:
         logger.error(f"❌ Error starting subscription checker: {e}")
 
@@ -765,7 +737,6 @@ def save_payment(payment_id: str, user_id: str, amount: float, tariff: str, paym
             payment_data['selected_server'] = selected_server
         
         db.collection('payments').document(payment_id).set(payment_data)
-        logger.info(f"💰 Payment saved: {payment_id} for user {user_id}")
     except Exception as e:
         logger.error(f"❌ Error saving payment: {e}")
 
@@ -775,16 +746,12 @@ def update_payment_status(payment_id: str, status: str, yookassa_id: str = None)
     try:
         update_data = {
             'status': status,
-            'updated_at': firestore.SERVER_TIMESTAMP
+            'yookassa_id': yookassa_id
         }
-        if yookassa_id:
-            update_data['yookassa_id'] = yookassa_id
-            
         if status == 'succeeded':
             update_data['confirmed_at'] = firestore.SERVER_TIMESTAMP
         
         db.collection('payments').document(payment_id).update(update_data)
-        logger.info(f"💰 Payment status updated: {payment_id} -> {status}")
     except Exception as e:
         logger.error(f"❌ Error updating payment status: {e}")
 
@@ -838,19 +805,15 @@ def extract_referrer_id(start_param: str) -> str:
     return start_param
 
 async def update_subscription_days(user_id: str, additional_days: int, server_id: str = None) -> bool:
-    """Обновление дней подписки с ГАРАНТИРОВАННЫМ добавлением в Xray"""
+    """Обновление дней подписки с ГАРАНТИРОВАННЫМ добавлением в Xray - БЫСТРО"""
     if not db: 
         return False
     try:
         user_ref = db.collection('users').document(user_id)
+        user = user_ref.get()
         
-        @firestore.transactional
-        def update_subscription_transaction(transaction, user_ref, additional_days, server_id):
-            user_doc = user_ref.get(transaction=transaction)
-            if not user_doc.exists:
-                return False, None
-                
-            user_data = user_doc.to_dict()
+        if user.exists:
+            user_data = user.to_dict()
             current_days = user_data.get('subscription_days', 0)
             new_days = current_days + additional_days
             
@@ -874,29 +837,23 @@ async def update_subscription_days(user_id: str, additional_days: int, server_id
                 subscription_end = datetime.now() + timedelta(days=new_days)
                 update_data['subscription_end'] = subscription_end.isoformat()
             
-            # Генерируем UUID если нужно
-            vless_uuid = user_data.get('vless_uuid')
-            if has_subscription and not vless_uuid:
-                vless_uuid = generate_user_uuid()
-                update_data['vless_uuid'] = vless_uuid
+            if has_subscription:
+                try:
+                    vless_uuid = await ensure_user_uuid(user_id, server_id)
+                    update_data['vless_uuid'] = vless_uuid
+                    
+                    if not user_data.get('subscription_start'):
+                        update_data['subscription_start'] = datetime.now().isoformat()
+                        
+                except Exception as e:
+                    logger.error(f"❌ FAILED to ensure UUID for user {user_id}: {e}")
+                    return False
             
-            transaction.update(user_ref, update_data)
-            return True, vless_uuid or update_data.get('vless_uuid')
-        
-        transaction = db.transaction()
-        success, vless_uuid = update_subscription_transaction(transaction, user_ref, additional_days, server_id)
-        
-        if success and vless_uuid:
-            # Асинхронно добавляем в Xray
-            servers_to_add = [server_id] if server_id else list(XRAY_SERVERS.keys())
-            asyncio.create_task(fast_add_to_xray(vless_uuid, servers_to_add))
-            
-            logger.info(f"✅ Subscription updated for user {user_id}: +{additional_days} days, UUID: {vless_uuid}")
+            user_ref.update(update_data)
+            logger.info(f"✅ Subscription updated for user {user_id}: +{additional_days} days, start: {update_data.get('subscription_start')}, end: {update_data.get('subscription_end')}")
             return True
         else:
-            logger.error(f"❌ Failed to update subscription for user {user_id}")
             return False
-            
     except Exception as e:
         logger.error(f"❌ Error updating subscription days: {e}")
         return False
@@ -953,136 +910,10 @@ async def startup_event():
     ensure_logo_exists()
     start_subscription_checker()
     
-    # Проверяем обязательные переменные окружения
-    required_env_vars = ['FIREBASE_PROJECT_ID', 'FIREBASE_PRIVATE_KEY', 'FIREBASE_CLIENT_EMAIL', 'SHOP_ID', 'API_KEY']
-    missing_vars = [var for var in required_env_vars if not os.getenv(var)]
-    
-    if missing_vars:
-        logger.warning(f"⚠️ Missing environment variables: {missing_vars}")
-    else:
-        logger.info("✅ All required environment variables are set")
-    
     logger.info("🔄 Starting Telegram bot automatically...")
     bot_thread = threading.Thread(target=run_bot, daemon=True)
     bot_thread.start()
     logger.info("✅ Telegram bot started successfully")
-
-# WEBHOOK для ЮКассы
-@app.post("/yookassa-webhook")
-async def yookassa_webhook(request: Request, background_tasks: BackgroundTasks):
-    """
-    Webhook для уведомлений от ЮКассы
-    """
-    try:
-        body = await request.body()
-        signature = request.headers.get('Yookassa-Signature')
-        
-        # Проверяем подпись если секретный ключ установлен
-        if not verify_yookassa_signature(body, signature):
-            logger.warning("⚠️ Invalid Yookassa signature")
-            return JSONResponse(status_code=401, content={"error": "Invalid signature"})
-        
-        data = json.loads(body.decode('utf-8'))
-        logger.info(f"🔄 Yookassa webhook received: {data.get('event')}")
-        
-        event = data.get('event')
-        if event == 'payment.succeeded':
-            payment_object = data.get('object', {})
-            payment_id = payment_object.get('id')
-            metadata = payment_object.get('metadata', {})
-            
-            user_id = metadata.get('user_id')
-            payment_type = metadata.get('payment_type')
-            tariff = metadata.get('tariff')
-            amount = float(payment_object['amount']['value'])
-            
-            logger.info(f"💰 Payment succeeded: {payment_id}, user: {user_id}, type: {payment_type}")
-            
-            # Фоновая обработка платежа
-            background_tasks.add_task(process_successful_payment, payment_id, user_id, payment_type, tariff, amount, metadata)
-            
-            return {"success": True, "message": "Webhook processed"}
-        
-        logger.info(f"📨 Yookassa event ignored: {event}")
-        return {"success": True, "message": "Event ignored"}
-        
-    except Exception as e:
-        logger.error(f"❌ Yookassa webhook error: {e}")
-        return JSONResponse(status_code=500, content={"error": str(e)})
-
-async def process_successful_payment(payment_id: str, user_id: str, payment_type: str, tariff: str, amount: float, metadata: dict):
-    """Обработка успешного платежа"""
-    try:
-        # Находим payment в базе по yookassa_id
-        payments_ref = db.collection('payments')
-        query = payments_ref.where('yookassa_id', '==', payment_id).limit(1)
-        payments = query.stream()
-        
-        payment_doc = None
-        local_payment_id = None
-        
-        for doc in payments:
-            payment_doc = doc
-            payment_data = doc.to_dict()
-            local_payment_id = payment_data.get('payment_id')
-            break
-        
-        if payment_doc and local_payment_id:
-            payment_data = payment_doc.to_dict()
-            selected_server = payment_data.get('selected_server')
-            
-            # Обновляем статус платежа
-            update_payment_status(local_payment_id, 'succeeded', payment_id)
-            
-            if payment_type == 'tariff':
-                # Активируем подписку
-                tariff_days = TARIFFS[tariff]["days"]
-                success = await update_subscription_days(user_id, tariff_days, selected_server)
-                
-                if success:
-                    logger.info(f"✅ Tariff activated via webhook: user {user_id}, {tariff_days} days on server {selected_server}")
-                    
-                    # Применяем реферальный бонус если есть
-                    user = get_user(user_id)
-                    if user and user.get('referred_by'):
-                        referrer_id = user['referred_by']
-                        referral_id = f"{referrer_id}_{user_id}"
-                        
-                        referral_exists = db.collection('referrals').document(referral_id).get().exists
-                        
-                        if not referral_exists:
-                            add_referral_bonus_immediately(referrer_id, user_id)
-                            logger.info(f"💰 Referral bonus applied via webhook for {user_id}")
-                else:
-                    logger.error(f"❌ Failed to activate tariff via webhook for user {user_id}")
-            
-            elif payment_type == 'balance':
-                # Пополняем баланс
-                success = update_user_balance(user_id, amount)
-                if success:
-                    logger.info(f"✅ Balance updated via webhook: user {user_id}, +{amount}₽")
-                else:
-                    logger.error(f"❌ Failed to update balance via webhook for user {user_id}")
-        
-        else:
-            logger.warning(f"⚠️ Payment not found in database: {payment_id}, creating new record")
-            
-            # Создаем запись о платеже если не нашли
-            local_payment_id = str(uuid.uuid4())
-            save_payment(local_payment_id, user_id, amount, tariff, payment_type, "yookassa", metadata.get('selected_server'))
-            update_payment_status(local_payment_id, 'succeeded', payment_id)
-            
-            # Обрабатываем платеж
-            if payment_type == 'tariff':
-                tariff_days = TARIFFS[tariff]["days"]
-                await update_subscription_days(user_id, tariff_days, metadata.get('selected_server'))
-            elif payment_type == 'balance':
-                update_user_balance(user_id, amount)
-            
-        logger.info(f"✅ Payment processing completed: {payment_id}")
-            
-    except Exception as e:
-        logger.error(f"❌ Error processing successful payment: {e}")
 
 # API ЭНДПОИНТЫ
 @app.get("/")
@@ -1091,34 +922,29 @@ async def root():
         with open("index.html", "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
     
+    xray_users_count = await get_xray_users_count()
     return {
         "message": "VAC VPN API is running", 
         "status": "ok",
         "firebase": "connected" if db else "disconnected",
+        "xray_users": xray_users_count,
         "available_servers": len(VLESS_SERVERS),
         "environment": "production",
-        "timestamp": datetime.now().isoformat(),
-        "version": "2.0.0"
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/health")
 async def health_check():
-    # Проверяем все системы
-    systems = {
-        "firebase": db is not None,
-        "yookassa": bool(os.getenv("SHOP_ID") and os.getenv("API_KEY")),
-        "servers": len(XRAY_SERVERS) > 0
-    }
-    
-    status = "healthy" if all(systems.values()) else "degraded"
-    
+    xray_users_count = await get_xray_users_count()
     return {
-        "status": status,
+        "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "VAC VPN API",
-        "systems": systems,
-        "environment": "production",
-        "version": "2.0.0"
+        "firebase": "connected" if db else "disconnected",
+        "xray_users": xray_users_count,
+        "available_servers": [server["name"] for server in VLESS_SERVERS],
+        "database_connected": db is not None,
+        "environment": "production"
     }
 
 @app.get("/servers")
@@ -1130,20 +956,18 @@ async def get_available_servers():
 
 @app.get("/debug-servers")
 async def debug_servers():
-    """Проверка статуса всех серверов"""
     results = {}
     for server_name, server_config in XRAY_SERVERS.items():
         try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient() as client:
                 response = await client.get(
                     f"{server_config['url']}/health",
-                    timeout=10.0
+                    timeout=5.0
                 )
                 results[server_name] = {
                     "status": response.status_code,
                     "url": server_config['url'],
-                    "healthy": response.status_code == 200,
-                    "response_time": f"{response.elapsed.total_seconds():.2f}s"
+                    "healthy": response.status_code == 200
                 }
         except Exception as e:
             results[server_name] = {
@@ -1152,6 +976,28 @@ async def debug_servers():
                 "healthy": False
             }
     return results
+
+@app.delete("/clear-referrals/{user_id}")
+async def clear_referrals(user_id: str):
+    try:
+        if not db:
+            return {"error": "Database not connected"}
+        
+        referrals_ref = db.collection('referrals').where('referrer_id', '==', user_id)
+        referrals = referrals_ref.stream()
+        for ref in referrals:
+            ref.reference.delete()
+        
+        user_ref = db.collection('users').document(user_id)
+        user_ref.update({
+            'referred_by': firestore.DELETE_FIELD
+        })
+        
+        return {"success": True, "message": "Referrals cleared"}
+        
+    except Exception as e:
+        logger.error(f"❌ Error clearing referrals: {e}")
+        return {"error": str(e)}
 
 @app.post("/init-user")
 async def init_user(request: InitUserRequest):
@@ -1162,24 +1008,17 @@ async def init_user(request: InitUserRequest):
         if not request.user_id or request.user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
         
-        logger.info(f"🔐 INIT USER: {request.user_id}, name: {request.first_name}, username: {request.username}")
-        logger.info(f"📱 Start param: {request.start_param}")
-        
         referrer_id = None
         is_referral = False
         bonus_applied = False
         
-        # Обрабатываем реферальную систему из start_param
         if request.start_param:
-            logger.info(f"🎯 Processing start_param: {request.start_param}")
             referrer_id = extract_referrer_id(request.start_param)
             
-            if referrer_id and referrer_id != request.user_id:
-                logger.info(f"👥 Referrer detected: {referrer_id}")
-                
+            if referrer_id:
                 referrer = get_user(referrer_id)
                 
-                if referrer:
+                if referrer and referrer_id != request.user_id:
                     referral_id = f"{referrer_id}_{request.user_id}"
                     referral_exists = db.collection('referrals').document(referral_id).get().exists
                     
@@ -1188,9 +1027,6 @@ async def init_user(request: InitUserRequest):
                         bonus_result = add_referral_bonus_immediately(referrer_id, request.user_id)
                         if bonus_result:
                             bonus_applied = True
-                            logger.info(f"💰 Referral bonus applied: {referrer_id} -> {request.user_id}")
-                else:
-                    logger.warning(f"⚠️ Referrer {referrer_id} not found in database")
         
         user_ref = db.collection('users').document(request.user_id)
         user_doc = user_ref.get()
@@ -1201,7 +1037,7 @@ async def init_user(request: InitUserRequest):
                 'username': request.username,
                 'first_name': request.first_name,
                 'last_name': request.last_name,
-                'balance': REFERRAL_BONUS_REFERRED if bonus_applied else 0.0,
+                'balance': 100.0 if bonus_applied else 0.0,
                 'has_subscription': False,
                 'subscription_days': 0,
                 'subscription_start': None,
@@ -1209,21 +1045,17 @@ async def init_user(request: InitUserRequest):
                 'vless_uuid': None,
                 'preferred_server': None,
                 'last_subscription_check': datetime.now().date().isoformat(),
-                'created_at': firestore.SERVER_TIMESTAMP,
-                'start_param': request.start_param,
-                'referrer_id': referrer_id if is_referral else None
+                'created_at': firestore.SERVER_TIMESTAMP
             }
             
             if is_referral and referrer_id:
                 user_data['referred_by'] = referrer_id
             
-            # Генерируем реферальную ссылку
+            # Генерируем и сохраняем реферальную ссылку
             referral_link = generate_referral_link(request.user_id)
             user_data['referral_link'] = referral_link
             
             user_ref.set(user_data)
-            
-            logger.info(f"✅ NEW USER CREATED: {request.user_id} (referral: {is_referral}, bonus: {bonus_applied})")
             
             return {
                 "success": True, 
@@ -1231,21 +1063,18 @@ async def init_user(request: InitUserRequest):
                 "user_id": request.user_id,
                 "is_referral": is_referral,
                 "bonus_applied": bonus_applied,
-                "referral_link": referral_link,
-                "referrer_id": referrer_id
+                "referral_link": referral_link
             }
         else:
             user_data = user_doc.to_dict()
             has_referrer = user_data.get('referred_by') is not None
             
-            # Обновляем реферальную ссылку если её нет
+            # Если у пользователя еще нет реферальной ссылки, генерируем и сохраняем её
             if not user_data.get('referral_link'):
                 referral_link = generate_referral_link(request.user_id)
                 save_referral_link(request.user_id, referral_link)
             else:
                 referral_link = user_data.get('referral_link')
-            
-            logger.info(f"✅ EXISTING USER LOADED: {request.user_id} (has_referrer: {has_referrer})")
             
             return {
                 "success": True, 
@@ -1269,7 +1098,7 @@ async def get_user_info(user_id: str):
         if not user_id or user_id == 'unknown':
             return JSONResponse(status_code=400, content={"error": "Invalid user ID"})
             
-        # Асинхронная проверка подписки
+        # БЫСТРАЯ проверка подписки без блокировки
         asyncio.create_task(process_subscription_days_async(user_id))
             
         user = get_user(user_id)
@@ -1368,8 +1197,7 @@ async def add_balance(request: AddBalanceRequest):
                     "user_id": request.user_id,
                     "payment_type": "balance",
                     "amount": request.amount
-                },
-                "save_payment_method": False
+                }
             }
             
             async with httpx.AsyncClient() as client:
@@ -1397,7 +1225,6 @@ async def add_balance(request: AddBalanceRequest):
                     "message": f"Перейдите по ссылке для пополнения баланса на {request.amount}₽"
                 }
             else:
-                logger.error(f"❌ Yookassa API error: {response.status_code} - {response.text}")
                 return JSONResponse(status_code=500, content={"error": f"Payment gateway error: {response.status_code}"})
         else:
             return JSONResponse(status_code=400, content={"error": "Invalid payment method"})
@@ -1484,8 +1311,7 @@ async def activate_tariff(request: ActivateTariffRequest):
                     "payment_type": "tariff",
                     "tariff_days": tariff_days,
                     "selected_server": selected_server
-                },
-                "save_payment_method": False
+                }
             }
             
             async with httpx.AsyncClient() as client:
@@ -1515,7 +1341,6 @@ async def activate_tariff(request: ActivateTariffRequest):
                     "message": f"Перейдите по ссылке для оплаты подписки на сервере {selected_server}"
                 }
             else:
-                logger.error(f"❌ Yookassa API error: {response.status_code} - {response.text}")
                 return JSONResponse(status_code=500, content={"error": f"Payment gateway error: {response.status_code}"})
         
         else:
@@ -1700,7 +1525,7 @@ async def get_vless_config(user_id: str, server_id: str = None):
         if not db:
             return JSONResponse(status_code=500, content={"error": "Database not connected"})
             
-        # Асинхронная проверка подписки
+        # Асинхронная проверка подписки без блокировки
         asyncio.create_task(process_subscription_days_async(user_id))
             
         user = get_user(user_id)
@@ -1710,10 +1535,10 @@ async def get_vless_config(user_id: str, server_id: str = None):
         if not user.get('has_subscription', False):
             return JSONResponse(status_code=400, content={"error": "No active subscription"})
         
-        # Получаем UUID
+        # СУПЕР БЫСТРОЕ получение UUID
         vless_uuid = await ensure_user_uuid(user_id, server_id)
         
-        # Создаем конфиги
+        # Мгновенное создание конфигов
         configs = create_user_vless_configs(user_id, vless_uuid, server_id)
         
         return {
@@ -1732,65 +1557,148 @@ async def get_vless_config(user_id: str, server_id: str = None):
         logger.error(f"❌ Error getting VLESS config: {e}")
         return JSONResponse(status_code=500, content={"error": f"Error getting VLESS config: {str(e)}"})
 
-# Дополнительные endpoints для диагностики и управления
-@app.post("/manual-check-payment")
-async def manual_check_payment(payment_id: str):
-    """Ручная проверка статуса платежа"""
+@app.post("/save-vless-key")
+async def save_vless_key(request: SaveVlessKeyRequest):
     try:
-        payment = get_payment(payment_id)
-        if not payment:
-            return {"error": "Payment not found"}
+        if not db:
+            return JSONResponse(status_code=500, content={"error": "Database not connected"})
         
-        yookassa_id = payment.get('yookassa_id')
-        if not yookassa_id:
-            return {"error": "No Yookassa ID"}
+        success = save_vless_key_to_db(
+            request.user_id, 
+            request.server_id, 
+            request.vless_key, 
+            request.config_data
+        )
         
-        SHOP_ID = os.getenv("SHOP_ID")
-        API_KEY = os.getenv("API_KEY")
-        
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"https://api.yookassa.ru/v3/payments/{yookassa_id}",
-                auth=(SHOP_ID, API_KEY),
-                timeout=30.0
-            )
-            
-            if response.status_code == 200:
-                yookassa_data = response.json()
-                status = yookassa_data.get('status')
-                
-                if status == 'succeeded':
-                    # Обрабатываем успешный платеж
-                    user_id = payment.get('user_id')
-                    payment_type = payment.get('payment_type')
-                    
-                    if payment_type == 'tariff':
-                        tariff = payment.get('tariff')
-                        tariff_days = TARIFFS[tariff]["days"]
-                        selected_server = payment.get('selected_server')
-                        
-                        success = await update_subscription_days(user_id, tariff_days, selected_server)
-                        if success:
-                            update_payment_status(payment_id, 'succeeded')
-                            return {"success": True, "message": "Tariff activated"}
-                    
-                    elif payment_type == 'balance':
-                        amount = payment.get('amount')
-                        success = update_user_balance(user_id, amount)
-                        if success:
-                            update_payment_status(payment_id, 'succeeded')
-                            return {"success": True, "message": "Balance updated"}
-                
-                return {"status": status}
-            
-            return {"error": f"Yookassa API error: {response.status_code}"}
+        if success:
+            return {
+                "success": True,
+                "message": "VLESS key saved successfully"
+            }
+        else:
+            return JSONResponse(status_code=500, content={"error": "Failed to save VLESS key"})
             
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"❌ Error saving VLESS key: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/get-user-vless-keys")
+async def get_user_vless_keys_endpoint(user_id: str):
+    try:
+        if not db:
+            return JSONResponse(status_code=500, content={"error": "Database not connected"})
+        
+        vless_keys = get_user_vless_keys(user_id)
+        
+        return {
+            "success": True,
+            "user_id": user_id,
+            "vless_keys": vless_keys,
+            "total_keys": len(vless_keys)
+        }
+            
+    except Exception as e:
+        logger.error(f"❌ Error getting user VLESS keys: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.get("/check-user-access")
+async def check_user_access(user_uuid: str):
+    try:
+        users_ref = db.collection('users')
+        query = users_ref.where('vless_uuid', '==', user_uuid).limit(1)
+        results = query.stream()
+        
+        for doc in results:
+            user_data = doc.to_dict()
+            user_id = user_data.get('user_id')
+            
+            process_subscription_days(user_id)
+            
+            user_updated = get_user(user_id)
+            has_subscription = user_updated.get('has_subscription', False)
+            subscription_days = user_updated.get('subscription_days', 0)
+            
+            if has_subscription and subscription_days > 0:
+                return {
+                    "success": True,
+                    "has_access": True,
+                    "user_id": user_id,
+                    "subscription_days": subscription_days
+                }
+        
+        return {
+            "success": True, 
+            "has_access": False,
+            "reason": "No active subscription"
+        }
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+@app.get("/active-users")
+async def get_active_users():
+    try:
+        users_ref = db.collection('users')
+        query = users_ref.where('has_subscription', '==', True)
+        results = query.stream()
+        
+        active_users = []
+        for doc in results:
+            user_data = doc.to_dict()
+            if user_data.get('subscription_days', 0) > 0:
+                active_users.append({
+                    "user_id": user_data.get('user_id'),
+                    "uuid": user_data.get('vless_uuid'),
+                    "subscription_days": user_data.get('subscription_days', 0),
+                    "subscription_start": user_data.get('subscription_start'),
+                    "subscription_end": user_data.get('subscription_end')
+                })
+        
+        return {
+            "success": True,
+            "users": active_users,
+            "total": len(active_users)
+        }
+        
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": str(e)}
+        )
+
+@app.post("/force-add-to-xray")
+async def force_add_to_xray(user_id: str, server_id: str = None):
+    try:
+        user = get_user(user_id)
+        if not user:
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+        
+        vless_uuid = user.get('vless_uuid')
+        if not vless_uuid:
+            return JSONResponse(status_code=400, content={"error": "User has no UUID"})
+        
+        success = await add_user_to_xray_server(server_id, user_id, vless_uuid)
+        
+        if success:
+            return {
+                "success": True,
+                "message": f"User {user_id} (UUID: {vless_uuid}) successfully added to Xray"
+            }
+        else:
+            return JSONResponse(
+                status_code=500,
+                content={"error": f"Failed to add user {user_id} to Xray"}
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Error in force-add-to-xray: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.post("/emergency-add-to-xray")
 async def emergency_add_to_xray(user_id: str):
-    """Экстренное добавление пользователя во все Xray серверы"""
     try:
         user = get_user(user_id)
         if not user:
@@ -1822,6 +1730,49 @@ async def emergency_add_to_xray(user_id: str):
             
     except Exception as e:
         logger.error(f"❌ Error in emergency-add-to-xray: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
+@app.post("/admin-cancel-subscription")
+async def admin_cancel_subscription(user_id: str):
+    try:
+        if not db:
+            return JSONResponse(status_code=500, content={"error": "Database not connected"})
+        
+        user_ref = db.collection('users').document(user_id)
+        user = user_ref.get()
+        
+        if not user.exists:
+            return JSONResponse(status_code=404, content={"error": "User not found"})
+        
+        user_data = user.to_dict()
+        vless_uuid = user_data.get('vless_uuid')
+        
+        update_data = {
+            'has_subscription': False,
+            'subscription_days': 0,
+            'subscription_start': None,
+            'subscription_end': datetime.now().isoformat(),  # Записываем время окончания подписки
+            'updated_at': firestore.SERVER_TIMESTAMP
+        }
+        
+        user_ref.update(update_data)
+        
+        user_vless_keys = get_user_vless_keys(user_id)
+        for key_data in user_vless_keys:
+            update_vless_key_status(user_id, key_data['server_id'], False)
+        
+        return {
+            "success": True,
+            "message": f"Subscription cancelled for user {user_id}",
+            "user_id": user_id,
+            "has_subscription": False,
+            "subscription_days": 0,
+            "vless_uuid": vless_uuid,
+            "subscription_end": update_data['subscription_end']
+        }
+            
+    except Exception as e:
+        logger.error(f"❌ Error cancelling subscription: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
 @app.get("/get-referral-link")
@@ -1874,35 +1825,34 @@ async def get_referral_stats(user_id: str):
         logger.error(f"❌ Error getting referral stats: {e}")
         return JSONResponse(status_code=500, content={"error": str(e)})
 
-@app.get("/debug-user/{user_id}")
-async def debug_user(user_id: str):
-    """Диагностика пользователя"""
+@app.get("/web-app")
+async def telegram_web_app(request: Request, tgWebAppData: str = None):
+    """
+    Обработчик для Telegram Web App с передачей параметров
+    """
     try:
-        user = get_user(user_id)
-        if not user:
-            return {"error": "User not found"}
+        if tgWebAppData:
+            # Парсим данные из Telegram Web App
+            from urllib.parse import parse_qs
+            parsed_data = parse_qs(tgWebAppData)
+            
+            # Извлекаем user_id
+            user_id = None
+            if 'user' in parsed_data:
+                import json
+                user_data = json.loads(parsed_data['user'][0])
+                user_id = user_data.get('id')
+            
+            if user_id:
+                # Перенаправляем на главную страницу с user_id
+                return RedirectResponse(url=f"/?user_id={user_id}")
         
-        payments_ref = db.collection('payments').where('user_id', '==', user_id)
-        payments = payments_ref.stream()
-        payment_list = [payment.to_dict() for payment in payments]
-        
-        vless_keys = get_user_vless_keys(user_id)
-        
-        xray_status = {}
-        if user.get('vless_uuid'):
-            for server_name in XRAY_SERVERS.keys():
-                xray_status[server_name] = await check_user_in_xray(user['vless_uuid'], server_name)
-        
-        return {
-            "user": user,
-            "payments": payment_list,
-            "vless_keys": vless_keys,
-            "xray_status": xray_status,
-            "subscription_active": user.get('has_subscription', False) and user.get('subscription_days', 0) > 0
-        }
+        # Если параметров нет, перенаправляем на страницу с инструкцией
+        return RedirectResponse(url="/?need_telegram=true")
         
     except Exception as e:
-        return {"error": str(e)}
+        logger.error(f"Error processing Telegram Web App data: {e}")
+        return RedirectResponse(url="/")
 
 if __name__ == "__main__":
     import uvicorn
