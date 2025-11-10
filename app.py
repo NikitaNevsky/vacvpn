@@ -81,6 +81,14 @@ VLESS_SERVERS = [
         "short_id": "abcd1234",
         "flow": "xtls-rprx-vision",
         "security": "reality"
+    },
+     "Netherlands": {
+        "url": "http://103.75.126.91:8001",  
+        "api_key": "6e6fb03c83484749d7bf1d3ca0d130fbfee3854c4a8ce84fc8aabfeaa2c19fd1",  
+        "display_name": "Netherlands",
+        "api_url": "http://103.75.126.91:8002",  
+        "reality_pbk": "biUkzZNhzbhq_b8jcw2_xbpyAQPojjG_icyZ_syWdm8",
+        "ssh_host": "103.75.126.91"
     }
 ]
 
