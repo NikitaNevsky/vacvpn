@@ -1105,9 +1105,15 @@
       }
       
       // Показываем базовую информацию даже при ошибках
-      document.getElementById('refLink').textContent = `https://t.me/vaaaac_bot?start=ref_${userId}`;
-      document.getElementById('referralCount').textContent = '0';
-      document.getElementById('totalBonusMoney').textContent = '0';
+      const refLinkElement = document.getElementById('refLink');
+      if (refLinkElement) {
+        refLinkElement.textContent = `https://t.me/vaaaac_bot?start=ref_${userId}`;
+      }
+      
+      const referralCountElement = document.getElementById('referralCount');
+      const totalBonusMoneyElement = document.getElementById('totalBonusMoney');
+      if (referralCountElement) referralCountElement.textContent = '0';
+      if (totalBonusMoneyElement) totalBonusMoneyElement.textContent = '0';
     }
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ UI ====================
@@ -1205,6 +1211,8 @@
 
     // Анимация счетчика
     function animateCounter(element, targetValue, duration = 1000) {
+      if (!element) return;
+      
       const startValue = parseInt(element.textContent) || 0;
       const startTime = performance.now();
       
@@ -1231,36 +1239,54 @@
 
     function toggleMenu() {
       const menu = document.getElementById('menuDropdown');
-      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+      if (menu) {
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+      }
     }
 
     function showSupportChat() {
-      tg.openTelegramLink('https://t.me/vacvpn_support');
+      // ИСПРАВЛЕНО: правильный формат ссылки для Telegram
+      const supportUrl = 'https://t.me/vacvpn_support';
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.openTelegramLink(supportUrl);
+      } else {
+        window.open(supportUrl, '_blank');
+      }
       toggleMenu();
     }
 
     function showRules() {
-      tg.showAlert(
-        'Правила использования VAC VPN:\n\n' +
-        '1. Запрещено использование для незаконной деятельности\n' +
-        '2. Нельзя передавать аккаунт третьим лицам\n' +
-        '3. Возврат средств возможен в течение 3 дней\n' +
-        '4. VLESS ключ выдается только при активной подписке\n' +
-        '5. Подписка работает по принципу накопления дней\n' +
-        '6. Реферальные бонусы начисляются после покупки тарифа'
-      );
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.showAlert(
+          'Правила использования VAC VPN:\n\n' +
+          '1. Запрещено использование для незаконной деятельности\n' +
+          '2. Нельзя передавать аккаунт третьим лицам\n' +
+          '3. Возврат средств возможен в течение 3 дней\n' +
+          '4. VLESS ключ выдается только при активной подписке\n' +
+          '5. Подписка работает по принципу накопления дней\n' +
+          '6. Реферальные бонусы начисляются после покупки тарифа'
+        );
+      } else {
+        alert('Правила использования VAC VPN:\n\n1. Запрещено использование для незаконной деятельности\n2. Нельзя передавать аккаунт третьим лицам\n3. Возврат средств возможен в течение 3 дней\n4. VLESS ключ выдается только при активной подписке\n5. Подписка работает по принципу накопления дней\n6. Реферальные бонусы начисляются после покупки тарифа');
+      }
       toggleMenu();
     }
 
     function logout() {
-      tg.showConfirm(
-        'Вы уверены, что хотите выйти?',
-        function(confirmed) {
-          if (confirmed) {
-            tg.close();
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.showConfirm(
+          'Вы уверены, что хотите выйти?',
+          function(confirmed) {
+            if (confirmed) {
+              window.Telegram.WebApp.close();
+            }
           }
+        );
+      } else {
+        if (confirm('Вы уверены, что хотите выйти?')) {
+          window.close();
         }
-      );
+      }
     }
 
     // ==================== ФУНКЦИИ КОПИРОВАНИЯ ====================
@@ -1292,33 +1318,52 @@
     }
 
     function copyRef() {
-      const refLink = document.getElementById('refLink').textContent;
-      copyToClipboard(refLink);
+      const refLinkElement = document.getElementById('refLink');
+      if (refLinkElement) {
+        const refLink = refLinkElement.textContent;
+        copyToClipboard(refLink);
+      }
     }
 
     // ==================== ФУНКЦИИ ПОПОЛНЕНИЯ БАЛАНСА ====================
 
     function showAddBalanceModal() {
-      document.getElementById('addBalanceModal').style.display = 'flex';
+      const modal = document.getElementById('addBalanceModal');
+      if (modal) {
+        modal.style.display = 'flex';
+      }
     }
 
     function closeAddBalanceModal() {
-      document.getElementById('addBalanceModal').style.display = 'none';
+      const modal = document.getElementById('addBalanceModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
     }
 
     function setBalanceAmount(amount) {
-      document.getElementById('balanceAmount').value = amount;
+      const amountInput = document.getElementById('balanceAmount');
+      if (amountInput) {
+        amountInput.value = amount;
+      }
       // Снимаем выделение со всех пресетов
       document.querySelectorAll('.amount-preset').forEach(preset => {
         preset.classList.remove('selected');
       });
       // Выделяем выбранный пресет
-      event.target.classList.add('selected');
+      if (event && event.target) {
+        event.target.classList.add('selected');
+      }
     }
 
     async function addBalance() {
       try {
         const amountInput = document.getElementById('balanceAmount');
+        if (!amountInput) {
+          showError('Элемент ввода суммы не найден');
+          return;
+        }
+        
         const amount = parseFloat(amountInput.value);
         
         if (!amount || amount < 10 || amount > 50000) {
@@ -1445,7 +1490,11 @@
       document.querySelectorAll('.tariff-card').forEach(card => {
         card.classList.remove('selected');
       });
-      document.getElementById(`tariff${id}`).classList.add('selected');
+      
+      const tariffElement = document.getElementById(`tariff${id}`);
+      if (tariffElement) {
+        tariffElement.classList.add('selected');
+      }
       
       currentTariff = id;
       const tariff = tariffPlans[id];
@@ -1455,33 +1504,37 @@
       const buyTariffBtn = document.getElementById('buyTariffBtn');
       const paymentMethods = document.getElementById('paymentMethods');
       
-      tariffPaymentInfo.style.display = 'block';
-      paymentMethods.style.display = 'block';
+      if (tariffPaymentInfo) tariffPaymentInfo.style.display = 'block';
+      if (paymentMethods) paymentMethods.style.display = 'block';
       
-      tariffPaymentInfo.innerHTML = `
-        <strong>При покупке подписки:</strong><br>
-        • Стоимость: <strong style="color: var(--primary);">${tariff.price}₽</strong><br>
-        • Период: <strong>${tariff.days} дней</strong><br>
-        • Реферал: <strong>+50₽ на ваш баланс</strong><br>
-        • После оплата: <strong>Подписка активируется сразу</strong>
-      `;
+      if (tariffPaymentInfo) {
+        tariffPaymentInfo.innerHTML = `
+          <strong>При покупке подписки:</strong><br>
+          • Стоимость: <strong style="color: var(--primary);">${tariff.price}₽</strong><br>
+          • Период: <strong>${tariff.days} дней</strong><br>
+          • Реферал: <strong>+50₽ на ваш баланс</strong><br>
+          • После оплата: <strong>Подписка активируется сразу</strong>
+        `;
+      }
       
       // Обновляем информацию о балансе
       updateBalanceInfo();
       
       // Обновляем текст кнопки
-      if (currentPaymentMethod === 'balance') {
-        buyTariffBtn.textContent = `ОПЛАТИТЬ С БАЛАНСА - ${tariff.price}₽`;
-      } else {
-        buyTariffBtn.textContent = `КУПИТЬ ПОДПИСКУ - ${tariff.price}₽`;
+      if (buyTariffBtn) {
+        if (currentPaymentMethod === 'balance') {
+          buyTariffBtn.textContent = `ОПЛАТИТЬ С БАЛАНСА - ${tariff.price}₽`;
+        } else {
+          buyTariffBtn.textContent = `КУПИТЬ ПОДПИСКУ - ${tariff.price}₽`;
+        }
+        buyTariffBtn.style.display = 'block';
       }
-      
-      buyTariffBtn.style.display = 'block';
     }
 
     // Функция выбора способа оплаты
     function selectPaymentMethod(method) {
-      if (method === 'balance' && document.getElementById('paymentBalance').classList.contains('disabled')) {
+      const balanceMethod = document.getElementById('paymentBalance');
+      if (method === 'balance' && balanceMethod && balanceMethod.classList.contains('disabled')) {
         return;
       }
       
@@ -1493,14 +1546,20 @@
       });
       
       // Выделяем выбранный способ
-      document.getElementById(`payment${method.charAt(0).toUpperCase() + method.slice(1)}`).classList.add('selected');
+      const methodElement = document.getElementById(`payment${method.charAt(0).toUpperCase() + method.slice(1)}`);
+      if (methodElement) {
+        methodElement.classList.add('selected');
+      }
       
       // Обновляем текст кнопки в зависимости от способа оплаты
       const buyTariffBtn = document.getElementById('buyTariffBtn');
-      if (method === 'balance') {
-        buyTariffBtn.textContent = `ОПЛАТИТЬ С БАЛАНСА - ${getSelectedTariffPrice()}₽`;
-      } else {
-        buyTariffBtn.textContent = `КУПИТЬ ПОДПИСКУ - ${getSelectedTariffPrice()}₽`;
+      if (buyTariffBtn && currentTariff) {
+        const tariffPrice = getSelectedTariffPrice();
+        if (method === 'balance') {
+          buyTariffBtn.textContent = `ОПЛАТИТЬ С БАЛАНСА - ${tariffPrice}₽`;
+        } else {
+          buyTariffBtn.textContent = `КУПИТЬ ПОДПИСКУ - ${tariffPrice}₽`;
+        }
       }
     }
 
@@ -1516,16 +1575,18 @@
       const balanceElement = document.getElementById('balanceDetails');
       const balanceMethod = document.getElementById('paymentBalance');
       
-      if (userBalance >= tariffPrice) {
-        balanceElement.innerHTML = `<span class="balance-sufficient">Достаточно</span>`;
-        balanceMethod.classList.remove('disabled');
-      } else {
-        balanceElement.innerHTML = `<span class="balance-insufficient">Недостаточно</span>`;
-        balanceMethod.classList.add('disabled');
-        
-        // Если выбран способ оплаты с баланса, но средств недостаточно, переключаем на карту
-        if (currentPaymentMethod === 'balance') {
-          selectPaymentMethod('yookassa');
+      if (balanceElement && balanceMethod) {
+        if (userBalance >= tariffPrice) {
+          balanceElement.innerHTML = `<span class="balance-sufficient">Достаточно</span>`;
+          balanceMethod.classList.remove('disabled');
+        } else {
+          balanceElement.innerHTML = `<span class="balance-insufficient">Недостаточно</span>`;
+          balanceMethod.classList.add('disabled');
+          
+          // Если выбран способ оплаты с баланса, но средств недостаточно, переключаем на карту
+          if (currentPaymentMethod === 'balance') {
+            selectPaymentMethod('yookassa');
+          }
         }
       }
     }
@@ -1604,7 +1665,10 @@
             
             if (paymentUrl) {
               // Показываем модальное окно с подтверждением
-              document.getElementById('paymentModal').style.display = 'flex';
+              const paymentModal = document.getElementById('paymentModal');
+              if (paymentModal) {
+                paymentModal.style.display = 'flex';
+              }
               showSuccess('💳 Подготовлена страница оплаты');
             } else {
               throw new Error('Платежная ссылка не получена');
@@ -1641,7 +1705,10 @@
 
     // Функция закрытия модального окна оплаты
     function closePaymentModal() {
-      document.getElementById('paymentModal').style.display = 'none';
+      const modal = document.getElementById('paymentModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
     }
 
     // Функция для проверки статуса платежа
@@ -1709,10 +1776,12 @@
           const vlessServersList = document.getElementById('vlessServersList');
           
           // Обновляем UUID
-          vlessUuidText.textContent = result.vless_uuid;
+          if (vlessUuidText) {
+            vlessUuidText.textContent = result.vless_uuid;
+          }
           
           // Обновляем список серверов с кнопками копирования
-          if (result.configs && result.configs.length > 0) {
+          if (vlessServersList && result.configs && result.configs.length > 0) {
             vlessServersList.innerHTML = '<strong>🌐 Доступные серверы:</strong>';
             
             result.configs.forEach((configData, index) => {
@@ -1747,7 +1816,9 @@
             });
           }
           
-          vlessConfigContainer.style.display = 'block';
+          if (vlessConfigContainer) {
+            vlessConfigContainer.style.display = 'block';
+          }
           showSuccess('✅ Конфигурация загружена!');
           
         } else {
@@ -1806,31 +1877,29 @@
 
     // Функция закрытия QR модального окна
     function closeQRModal() {
-      document.getElementById('qrModal').style.display = 'none';
+      const modal = document.getElementById('qrModal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
     }
 
     // ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 
     function scrollToTariffs() {
-      document.getElementById('tariffBlock').scrollIntoView({ behavior: 'smooth' });
+      const tariffBlock = document.getElementById('tariffBlock');
+      if (tariffBlock) {
+        tariffBlock.scrollIntoView({ behavior: 'smooth' });
+      }
     }
 
     function showHelp() {
-      tg.showAlert(
-        '📱 Помощь по VAC VPN:\n\n' +
-        '1. Как купить подписку?\n' +
-        '   - Выберите тариф и способ оплаты\n' +
-        '   - Оплатите картой или с баланса\n' +
-        '   - После оплаты получите VLESS конфиг\n\n' +
-        '2. Как настроить VPN?\n' +
-        '   - Скачайте приложение для вашего устройства\n' +
-        '   - Импортируйте конфигурацию или QR код\n' +
-        '   - Включите VPN соединение\n\n' +
-        '3. Проблемы с подключением?\n' +
-        '   - Проверьте активность подписки\n' +
-        '   - Попробуйте другой сервер\n' +
-        '   - Обратитесь в поддержку'
-      );
+      // ИСПРАВЛЕНО: кнопка помощи теперь открывает чат поддержки
+      const supportUrl = 'https://t.me/vacvpn_support';
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.openTelegramLink(supportUrl);
+      } else {
+        window.open(supportUrl, '_blank');
+      }
     }
 
     // ==================== ИНИЦИАЛИЗАЦИЯ ПРИ ЗАГРУЗКЕ ====================
@@ -1839,8 +1908,10 @@
       console.log(`🚀 VAC VPN WebApp v${APP_VERSION} starting...`);
       
       // Инициализируем Telegram WebApp
-      tg.ready();
-      tg.expand();
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+      }
       
       // Загружаем логотип сразу
       loadLogoWithFallback();
