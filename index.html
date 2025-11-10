@@ -1294,7 +1294,6 @@
     async function copyToClipboard(text) {
       try {
         await navigator.clipboard.writeText(text);
-        showSuccess('Скопировано в буфер обмена!');
         return true;
       } catch (err) {
         console.error('Ошибка копирования: ', err);
@@ -1305,11 +1304,9 @@
         textArea.select();
         try {
           document.execCommand('copy');
-          showSuccess('Скопировано в буфер обмена!');
           return true;
         } catch (fallbackErr) {
           console.error('Fallback ошибка копирования: ', fallbackErr);
-          showError('Не удалось скопировать');
           return false;
         } finally {
           document.body.removeChild(textArea);
@@ -1322,6 +1319,7 @@
       if (refLinkElement) {
         const refLink = refLinkElement.textContent;
         copyToClipboard(refLink);
+        showSuccess('✅ Ссылка скопирована!');
       }
     }
 
@@ -1855,7 +1853,12 @@
           }
         }
 
-        await copyToClipboard(textToCopy);
+        const success = await copyToClipboard(textToCopy);
+        if (success) {
+          showSuccess('✅ Скопировано в буфер обмена!');
+        } else {
+          showError('❌ Не удалось скопировать');
+        }
         
       } catch (error) {
         console.error('Ошибка копирования:', error);
